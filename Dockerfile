@@ -20,14 +20,12 @@ ENV NODE_ENV=production \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends dumb-init ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system --gid 1000 nodeapp \
-    && useradd --system --uid 1000 --gid nodeapp --create-home nodeapp
+    && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build --chown=nodeapp:nodeapp /app /app
+COPY --from=build --chown=node:node /app /app
 
-RUN mkdir -p /app/data && chown -R nodeapp:nodeapp /app
-USER nodeapp
+RUN mkdir -p /app/data && chown -R node:node /app
+USER node
 
 EXPOSE 3001
 VOLUME ["/app/data"]
