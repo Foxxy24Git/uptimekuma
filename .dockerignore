@@ -15,6 +15,7 @@ db/kuma.db
 test
 tests
 prototype
+compose.yaml.upstream.bak
 *.md
 direction-approved.md
 screenshots

@@ -2,11 +2,10 @@
 
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
-ENV NODE_ENV=production \
-    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
 
 COPY package.json package-lock.json .npmrc ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --include=dev --no-audit --no-fund
 
 COPY . .
 RUN npm run build \
