@@ -1,0 +1,1 @@
+var e=``,t={languageName:``};export{t as default,e as languageName};

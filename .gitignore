@@ -1,13 +1,11 @@
 node_modules
 .DS_Store
-dist
 dist-ssr
 *.local
 .idea
 
 /data
 !/data/.gitkeep
-/db/kuma.db
 /data*
 /upload
 /screenshots
@@ -22,6 +20,10 @@ dist-ssr
 /extra/healthcheck.exe
 /extra/healthcheck
 /extra/healthcheck-armv7
+
+check_duplicates.js
+import_kantor.js
+inspect_db.js
 
 extra/exe-builder/bin
 extra/exe-builder/obj

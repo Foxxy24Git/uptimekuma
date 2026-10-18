@@ -22,7 +22,6 @@ upload
 private
 out
 tmp
-dist
 dist-ssr
 extra/exe-builder/bin
 extra/exe-builder/obj

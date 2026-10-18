@@ -1,0 +1,1 @@
+var e=`Lëtzebuergesch`,t={languageName:e};export{t as default,e as languageName};

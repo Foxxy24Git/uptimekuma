@@ -1,0 +1,1 @@
+var e=`עזרה`,t=`עברית`,n=`באיזה מסד נתונים אתה רוצה להשתמש?`,r={Help:e,languageName:t,setupDatabaseChooseDatabase:n};export{e as Help,r as default,t as languageName,n as setupDatabaseChooseDatabase};
