@@ -53,6 +53,8 @@ import {
     faCertificate,
     faFolder,
     faFolderOpen,
+    faNetworkWired,
+    faProjectDiagram,
 } from "@fortawesome/free-solid-svg-icons";
 
 library.add(
@@ -103,6 +105,8 @@ library.add(
     faCertificate,
     faFolder,
     faFolderOpen,
+    faNetworkWired,
+    faProjectDiagram,
 );
 
 export { FontAwesomeIcon };

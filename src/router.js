@@ -4,6 +4,9 @@ import EmptyLayout from "./layouts/EmptyLayout.vue";
 import Layout from "./layouts/Layout.vue";
 import Dashboard from "./pages/Dashboard.vue";
 import DashboardHome from "./pages/DashboardHome.vue";
+import NocDashboard from "./pages/NocDashboard.vue";
+import NocRuleEditor from "./pages/NocRuleEditor.vue";
+import NocGraphView from "./pages/NocGraphView.vue";
 import Details from "./pages/Details.vue";
 import EditMonitor from "./pages/EditMonitor.vue";
 import EditMaintenance from "./pages/EditMaintenance.vue";
@@ -44,6 +47,25 @@ const routes = [
         path: "/empty",
         component: Layout,
         children: [
+            {
+                name: "NocDashboard",
+                path: "/noc",
+                component: NocDashboard,
+            },
+            {
+                name: "NocGraphView",
+                path: "/noc/graph",
+                component: NocGraphView,
+            },
+            {
+                path: "/graph",
+                redirect: "/noc/graph",
+            },
+            {
+                name: "NocRuleEditor",
+                path: "/noc/rules/:id",
+                component: NocRuleEditor,
+            },
             {
                 path: "",
                 component: Dashboard,

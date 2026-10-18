@@ -1,0 +1,1501 @@
+<template>
+    <div ref="container" class="noc-graph-page">
+        <!-- TOP TOOLBAR & HEADER -->
+        <div class="noc-graph-header d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="noc-logo-badge">
+                    <font-awesome-icon icon="project-diagram" class="noc-header-icon" />
+                </div>
+                <div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="noc-title">TOPOLOGI JARINGAN GRAPH VIEW</span>
+                        <span class="noc-badge-obsidian">Obsidian View • 60 FPS</span>
+                    </div>
+                    <p class="noc-subtitle mb-0">Visualisasi Realtime Interaktif Jaringan ATM, Kantor Cabang & Link Backup</p>
+                </div>
+            </div>
+
+            <!-- Top Nav & Actions -->
+            <div class="d-flex align-items-center gap-2">
+                <router-link to="/noc" class="btn btn-sm noc-btn-secondary d-flex align-items-center gap-1.5" title="Kembali ke NOC Dashboard">
+                    <font-awesome-icon icon="network-wired" />
+                    <span class="small">NOC Dashboard</span>
+                </router-link>
+
+                <router-link to="/dashboard" class="btn btn-sm noc-btn-secondary d-flex align-items-center gap-1.5" title="Dashboard Utama">
+                    <font-awesome-icon icon="tachometer-alt" />
+                    <span class="d-none d-md-inline small">Dashboard Utama</span>
+                </router-link>
+
+                <div class="noc-clock-box d-none d-sm-flex align-items-center gap-2">
+                    <span class="noc-dot-live"></span>
+                    <span class="noc-mono-text font-bold">{{ currentTime }}</span>
+                </div>
+
+                <button class="btn btn-sm noc-btn-secondary" title="Fullscreen" @click="toggleFullScreen">
+                    <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0 0l-5-5m-7 11l-5 5m0 0h4m-4 0v-4m16 4l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- CANVAS MAIN AREA -->
+        <div class="noc-canvas-wrapper" @mousedown="onMouseDown" @mousemove="onMouseMove" @mouseup="onMouseUp" @wheel="onWheel" @mouseleave="onMouseLeave">
+            <canvas ref="canvas" class="noc-graph-canvas"></canvas>
+
+            <!-- FLOATING CONTROL PANEL (OBSIDIAN STYLE) -->
+            <div class="noc-floating-panel" :class="{ 'panel-collapsed': isPanelCollapsed }">
+                <div
+                    class="d-flex align-items-center justify-content-between p-2.5 px-3 cursor-pointer user-select-none"
+                    :class="{ 'border-bottom border-secondary-subtle': !isPanelCollapsed }"
+                    @click="isPanelCollapsed = !isPanelCollapsed"
+                >
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="noc-dot-blue"></span>
+                        <span class="fw-bold small text-light font-mono text-nowrap">KONTROL TOPOLOGI</span>
+                    </div>
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-link text-secondary text-decoration-none p-0 noc-panel-toggle ms-2"
+                        @click.stop="isPanelCollapsed = !isPanelCollapsed"
+                    >
+                        <span v-if="isPanelCollapsed" class="text-primary fw-semibold">Buka ▾</span>
+                        <span v-else>Tutup ▴</span>
+                    </button>
+                </div>
+
+                <div v-if="!isPanelCollapsed" class="p-3 d-flex flex-column gap-3 noc-panel-content">
+                    <!-- Search Input -->
+                    <div>
+                        <label class="text-secondary small fw-semibold mb-1 d-block">Cari Perangkat / Wilayah:</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-dark border-secondary text-secondary">
+                                <font-awesome-icon icon="search" />
+                            </span>
+                            <input
+                                v-model="searchQuery"
+                                type="text"
+                                class="form-control form-control-sm bg-dark text-light border-secondary font-mono"
+                                placeholder="Ketik ATM-..., KC-..., atau IP..."
+                                @keyup.enter="focusSearchedNode"
+                            />
+                            <button v-if="searchQuery" class="btn btn-sm btn-outline-secondary" @click="searchQuery = ''">
+                                &times;
+                            </button>
+                        </div>
+                        <div v-if="searchQuery && matchedNodeCount > 0" class="text-primary small mt-1 font-mono">
+                            Ditemukan {{ matchedNodeCount }} node.
+                        </div>
+                    </div>
+
+                    <!-- Filter Grup Wilayah -->
+                    <div>
+                        <label class="text-secondary small fw-semibold mb-1 d-block">Grup Wilayah / Cabang:</label>
+                        <select v-model="selectedGroup" class="form-select form-select-sm bg-dark text-light border-secondary">
+                            <option value="ALL">Semua Wilayah ({{ availableGroups.length }} Grup)</option>
+                            <option v-for="g in availableGroups" :key="g" :value="g">{{ g }}</option>
+                        </select>
+                    </div>
+
+                    <!-- Filter Status -->
+                    <div>
+                        <label class="text-secondary small fw-semibold mb-1 d-block">Filter Status:</label>
+                        <div class="btn-group btn-group-sm w-100" role="group">
+                            <button
+                                type="button"
+                                class="btn"
+                                :class="statusFilter === 'ALL' ? 'btn-primary' : 'btn-outline-secondary'"
+                                @click="statusFilter = 'ALL'"
+                            >
+                                Semua
+                            </button>
+                            <button
+                                type="button"
+                                class="btn"
+                                :class="statusFilter === 'UP' ? 'btn-success' : 'btn-outline-secondary'"
+                                @click="statusFilter = 'UP'"
+                            >
+                                UP ({{ stats.up }})
+                            </button>
+                            <button
+                                type="button"
+                                class="btn"
+                                :class="statusFilter === 'DOWN' ? 'btn-danger' : 'btn-outline-secondary'"
+                                @click="statusFilter = 'DOWN'"
+                            >
+                                DOWN ({{ stats.down }})
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filter Tipe Node -->
+                    <div>
+                        <label class="text-secondary small fw-semibold mb-1 d-block">Tipe Node Tampil:</label>
+                        <div class="d-flex flex-wrap gap-2 small">
+                            <label class="d-flex align-items-center gap-1 cursor-pointer">
+                                <input v-model="showAtm" type="checkbox" class="form-check-input" />
+                                <span>ATM</span>
+                            </label>
+                            <label class="d-flex align-items-center gap-1 cursor-pointer">
+                                <input v-model="showKantor" type="checkbox" class="form-check-input" />
+                                <span>Kantor</span>
+                            </label>
+                            <label class="d-flex align-items-center gap-1 cursor-pointer">
+                                <input v-model="showBackup" type="checkbox" class="form-check-input" />
+                                <span>Backup</span>
+                            </label>
+                            <label class="d-flex align-items-center gap-1 cursor-pointer">
+                                <input v-model="showAtmTag" type="checkbox" class="form-check-input" />
+                                <span>Tag ATM</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Physics & Animation Toggles -->
+                    <div class="border-top border-secondary-subtle pt-2">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="text-secondary small">Animasi Partikel Flow:</span>
+                            <div class="form-check form-switch mb-0">
+                                <input v-model="enableParticles" class="form-check-input" type="checkbox" />
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="text-secondary small">Tampilkan Semua Label:</span>
+                            <div class="form-check form-switch mb-0">
+                                <input v-model="alwaysShowLabels" class="form-check-input" type="checkbox" />
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="text-secondary small">Simulasi Fisika Aktif:</span>
+                            <div class="form-check form-switch mb-0">
+                                <input v-model="isPhysicsActive" class="form-check-input" type="checkbox" />
+                            </div>
+                        </div>
+
+                        <!-- Distance slider -->
+                        <div class="mt-2">
+                            <div class="d-flex justify-content-between text-secondary small">
+                                <span>Jarak Pegas Link:</span>
+                                <span class="font-mono">{{ linkDistance }}px</span>
+                            </div>
+                            <input v-model.number="linkDistance" type="range" class="form-range" min="30" max="180" step="5" />
+                        </div>
+                    </div>
+
+                    <!-- Navigation Action Buttons -->
+                    <div class="d-flex gap-2 border-top border-secondary-subtle pt-2">
+                        <button class="btn btn-sm btn-outline-secondary w-50" title="Reset Posisi Kamera" @click="resetCamera">
+                            Reset View
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary w-50" title="Ratakan Kembali Posisi" @click="reheatSimulation">
+                            Re-Layout
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FLOATING STATS & LEGEND (BOTTOM LEFT) -->
+            <div class="noc-floating-legend">
+                <div class="d-flex flex-wrap align-items-center gap-3 font-mono small">
+                    <div class="d-flex align-items-center gap-1.5">
+                        <span class="legend-circle core"></span>
+                        <span class="text-light">DC Core</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1.5">
+                        <span class="legend-circle kantor"></span>
+                        <span class="text-light">Kantor ({{ stats.kantor }})</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1.5">
+                        <span class="legend-circle atm"></span>
+                        <span class="text-light">ATM ({{ stats.atm }})</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1.5">
+                        <span class="legend-circle backup"></span>
+                        <span class="text-warning">Backup ({{ stats.backup }})</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1.5">
+                        <span class="legend-circle tag"></span>
+                        <span class="text-info">Tag ISP</span>
+                    </div>
+                    <div class="vr bg-secondary opacity-50"></div>
+                    <div class="d-flex align-items-center gap-1.5">
+                        <span class="legend-dot up"></span>
+                        <span class="text-primary">{{ stats.up }} UP</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1.5">
+                        <span class="legend-dot slow"></span>
+                        <span class="text-warning">{{ stats.slow }} SLOW</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-1.5">
+                        <span class="legend-dot down"></span>
+                        <span class="text-danger fw-bold">{{ stats.down }} DOWN</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HOVER TOOLTIP CARD -->
+            <div
+                v-if="hoveredNode"
+                class="noc-graph-tooltip"
+                :style="{ left: tooltipPos.x + 15 + 'px', top: tooltipPos.y + 15 + 'px' }"
+            >
+                <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                    <span class="badge" :class="getBadgeClass(hoveredNode)">
+                        {{ hoveredNode.type.toUpperCase() }}
+                    </span>
+                    <span class="font-mono small fw-bold" :class="getStatusTextColor(hoveredNode)">
+                        ● {{ hoveredNode.status.toUpperCase() }}
+                    </span>
+                </div>
+                <div class="fw-bold text-light font-sans mb-1">{{ hoveredNode.label }}</div>
+                <div class="small text-secondary font-mono">
+                    <div v-if="hoveredNode.group">Grup: <b class="text-light">{{ hoveredNode.group }}</b></div>
+                    <div v-if="hoveredNode.hostname">IP: <span class="text-light">{{ hoveredNode.hostname }}</span></div>
+                    <div v-if="hoveredNode.tag">Tag: <span class="text-info">{{ hoveredNode.tag }}</span></div>
+                    <div v-if="hoveredNode.ping !== undefined">
+                        Latency: <b :class="hoveredNode.ping > 150 ? 'text-warning' : 'text-primary'">{{ hoveredNode.ping ? hoveredNode.ping + 'ms' : 'RTO' }}</b>
+                    </div>
+                    <div v-if="hoveredNode.connectedCount !== undefined">
+                        Terkoneksi: <span class="text-light">{{ hoveredNode.connectedCount }} node</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script>
+import dayjs from "dayjs";
+import { UP, DOWN } from "../util.ts";
+
+export default {
+    name: "NocGraphView",
+    data() {
+        return {
+            currentTime: "",
+            clockTimer: null,
+            apiTimer: null,
+            apiMonitors: null,
+            apiLastHeartbeats: null,
+
+            // UI Controls
+            isPanelCollapsed: false,
+            searchQuery: "",
+            selectedGroup: "ALL",
+            statusFilter: "ALL",
+            showAtm: true,
+            showKantor: true,
+            showBackup: true,
+            showAtmTag: false, // Default mati agar tidak membuat jaring laba-laba ke semua node ATM
+            showTagNodes: true,
+            enableParticles: true,
+            alwaysShowLabels: false,
+            isPhysicsActive: true,
+            linkDistance: 80,
+
+            // Camera Transformation (Pan & Zoom)
+            camera: {
+                x: 0,
+                y: 0,
+                scale: 0.95,
+            },
+
+            // Graph Data Structures
+            nodes: [],
+            links: [],
+            particles: [],
+
+            // Interaction State
+            hoveredNode: null,
+            tooltipPos: { x: 0, y: 0 },
+            isDragging: false,
+            draggedNode: null,
+            isPanning: false,
+            panStart: { x: 0, y: 0 },
+
+            // Animation Frame
+            animationFrameId: null,
+            lastFrameTime: performance.now(),
+        };
+    },
+    computed: {
+        // Enriched list of all monitors (excluding type 'group')
+        allMonitors() {
+            const rawSource = (this.$root.monitorList && Object.keys(this.$root.monitorList).length > 0)
+                ? this.$root.monitorList
+                : (this.apiMonitors || {});
+
+            const list = Object.values(rawSource).filter(m => m.type !== "group");
+
+            return list.map(m => {
+                const groupName = (m.parent && rawSource[m.parent])
+                    ? rawSource[m.parent].name.trim()
+                    : "Lainnya";
+
+                const rawTagObjects = m.tags || [];
+                const rawTags = rawTagObjects.map(t => t.name);
+
+                let isKantor = rawTags.some(t => ["KANTOR CABANG", "CAPEM", "Kantor KAS"].includes(t)) ||
+                               /^(CABANG|Cabang|KTR CABANG)\b/i.test(m.name);
+
+                const isBackup = /backup|cadangan|secondary|failover|4g|lte/i.test(m.name) ||
+                                 rawTags.some(t => /backup|cadangan|secondary|failover/i.test(t));
+
+                let type = "ATM";
+                if (isBackup) {
+                    type = "BACKUP";
+                } else if (isKantor) {
+                    type = "KANTOR";
+                }
+
+                let provider = rawTags.find(t => ["Telkom", "ICON+", "LA", "Lintasarta", "Indosat", "Biznet"].includes(t)) || "Non-Tag";
+
+                return {
+                    ...m,
+                    group: groupName,
+                    type: type,
+                    tag: provider,
+                    tags: rawTags,
+                    tagColors: Object.fromEntries(rawTagObjects.map(t => [t.name, t.color])), 
+                };
+            });
+        },
+
+        availableGroups() {
+            const groups = new Set();
+            this.allMonitors.forEach(m => groups.add(m.group));
+            return Array.from(groups).sort();
+        },
+
+        matchedNodeCount() {
+            if (!this.searchQuery) {
+                return 0;
+            }
+            const q = this.searchQuery.toLowerCase().trim();
+            return this.nodes.filter(n => {
+                return n.label.toLowerCase().includes(q) ||
+                    (n.hostname && n.hostname.toLowerCase().includes(q)) ||
+                    (n.group && n.group.toLowerCase().includes(q));
+            }).length;
+        },
+
+        stats() {
+            let up = 0;
+            let slow = 0;
+            let down = 0;
+            let atm = 0;
+            let kantor = 0;
+            let backup = 0;
+
+            this.allMonitors.forEach(m => {
+                if (m.type === "ATM") {
+                    atm++;
+                } else if (m.type === "KANTOR") {
+                    kantor++;
+                } else if (m.type === "BACKUP") {
+                    backup++;
+                }
+
+                const beat = this.getBeat(m.id);
+                if (!beat) {
+                    up++;
+                } else if (beat.status === DOWN) {
+                    down++;
+                } else if (beat.ping && beat.ping > 150) {
+                    slow++;
+                } else {
+                    up++;
+                }
+            });
+
+            return { up, slow, down, atm, kantor, backup };
+        },
+    },
+    watch: {
+        allMonitors: {
+            handler() {
+                this.syncGraphData();
+            },
+            deep: true,
+        },
+        selectedGroup() {
+            this.syncGraphData();
+        },
+        statusFilter() {
+            this.syncGraphData();
+        },
+        showAtm() {
+            this.syncGraphData();
+        },
+        showKantor() {
+            this.syncGraphData();
+        },
+        showBackup() {
+            this.syncGraphData();
+        },
+        showAtmTag() {
+            this.syncGraphData();
+        },
+        showTagNodes() {
+            this.syncGraphData();
+        },
+        linkDistance() {
+            this.updateLinkDistances();
+        },
+    },
+    async mounted() {
+        this.updateClock();
+        this.clockTimer = setInterval(this.updateClock, 1000);
+
+        await this.checkAndFetchData();
+        this.apiTimer = setInterval(this.checkAndFetchData, 10000);
+
+        this.initCanvas();
+        this.syncGraphData(true);
+        this.startRenderLoop();
+
+        window.addEventListener("resize", this.handleResize);
+    },
+    beforeUnmount() {
+        if (this.clockTimer) {clearInterval(this.clockTimer);}
+        if (this.apiTimer) {clearInterval(this.apiTimer);}
+        if (this.animationFrameId) {cancelAnimationFrame(this.animationFrameId);}
+        window.removeEventListener("resize", this.handleResize);
+    },
+    methods: {
+        updateClock() {
+            this.currentTime = dayjs().format("HH:mm:ss") + " WIB";
+        },
+
+        async checkAndFetchData() {
+            if (!this.$root.monitorList || Object.keys(this.$root.monitorList).length === 0) {
+                try {
+                    const res = await fetch("/api/noc/data");
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.ok) {
+                            this.apiMonitors = data.monitorList;
+                            this.apiLastHeartbeats = data.lastHeartbeatList;
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to load /api/noc/data:", e);
+                }
+            }
+        },
+
+        getBeat(monitorId) {
+            return (this.$root.lastHeartbeatList && this.$root.lastHeartbeatList[monitorId])
+                || (this.apiLastHeartbeats && this.apiLastHeartbeats[monitorId]);
+        },
+
+        initCanvas() {
+            const canvas = this.$refs.canvas;
+            const container = this.$refs.container;
+            if (!canvas || !container) {return;}
+
+            const rect = container.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+
+            // Center camera
+            this.camera.x = rect.width / 2;
+            this.camera.y = rect.height / 2;
+        },
+
+        handleResize() {
+            this.initCanvas();
+        },
+
+        // Build Graph Nodes and Links from Uptime Kuma monitors
+        syncGraphData(initial = false) {
+            const existingNodeMap = new Map();
+            this.nodes.forEach(n => existingNodeMap.set(n.id, n));
+
+            const newNodes = [];
+            const newLinks = [];
+            const groupNodeMap = new Map();
+            const tagNodeMap = new Map();
+
+            // 1. Core Root Node: DC PUSAT
+            const coreId = "CORE_DC";
+            const existingCore = existingNodeMap.get(coreId);
+            const coreNode = {
+                id: coreId,
+                label: "DC PUSAT / NOC CORE",
+                type: "core",
+                radius: 17,
+                status: "up",
+                x: existingCore ? existingCore.x : 0,
+                y: existingCore ? existingCore.y : 0,
+                vx: existingCore ? existingCore.vx : 0,
+                vy: existingCore ? existingCore.vy : 0,
+                connectedCount: 0,
+            };
+            newNodes.push(coreNode);
+
+            // Filter monitors based on active UI controls
+            const filteredMonitors = this.allMonitors.filter(m => {
+                if (this.selectedGroup !== "ALL" && m.group !== this.selectedGroup) {return false;}
+                if (!this.showAtm && m.type === "ATM") {return false;}
+                if (!this.showKantor && m.type === "KANTOR") {return false;}
+                if (!this.showBackup && m.type === "BACKUP") {return false;}
+
+                const beat = this.getBeat(m.id);
+                const isDown = beat && beat.status === DOWN;
+                const isSlow = beat && beat.status === UP && beat.ping > 150;
+
+                if (this.statusFilter === "UP" && isDown) {return false;}
+                if (this.statusFilter === "DOWN" && !isDown) {return false;}
+
+                return true;
+            });
+
+            // Gather unique groups represented in filtered monitors
+            const activeGroups = new Set();
+            filteredMonitors.forEach(m => activeGroups.add(m.group));
+
+            // 2. Create Group / Kantor Cluster Nodes
+            const groupList = Array.from(activeGroups);
+            const groupAngleStep = (Math.PI * 2) / (groupList.length || 1);
+
+            groupList.forEach((grp, idx) => {
+                const grpId = "GRP_" + grp;
+                const existing = existingNodeMap.get(grpId);
+
+                // Initial circular position around Core if new
+                const angle = idx * groupAngleStep;
+                const dist = 180;
+                const defaultX = Math.cos(angle) * dist;
+                const defaultY = Math.sin(angle) * dist;
+
+                const grpNode = {
+                    id: grpId,
+                    label: grp,
+                    group: grp,
+                    type: "kantor",
+                    radius: 9,
+                    status: "up",
+                    x: existing ? existing.x : defaultX,
+                    y: existing ? existing.y : defaultY,
+                    vx: existing ? existing.vx : 0,
+                    vy: existing ? existing.vy : 0,
+                    connectedCount: 0,
+                };
+
+                newNodes.push(grpNode);
+                groupNodeMap.set(grp, grpNode);
+
+                // Link: DC -> Group / Kantor
+                newLinks.push({
+                    source: coreNode,
+                    target: grpNode,
+                    targetDist: this.linkDistance * 1.5,
+                    isBackup: false,
+                });
+                coreNode.connectedCount++;
+                grpNode.connectedCount++;
+            });
+
+            // 3. Create Tag / Provider Nodes (misal LA, Telkom, ICON+)
+            const activeTagColors = new Map();
+            filteredMonitors.forEach(m => {
+                (m.tags || []).forEach(tag => {
+                    if (!this.showAtmTag && tag.toLowerCase() === "atm") {
+                        return;
+                    }
+                    activeTagColors.set(tag, m.tagColors?.[tag] || "#14b8a6");
+                });
+                if (m.tag && m.tag !== "Non-Tag" && !activeTagColors.has(m.tag)) {
+                    if (!this.showAtmTag && m.tag.toLowerCase() === "atm") {
+                        return;
+                    }
+                    activeTagColors.set(m.tag, "#14b8a6");
+                }
+            });
+
+            const tagList = Array.from(activeTagColors.keys()).sort();
+            const tagAngleStep = (Math.PI * 2) / (tagList.length || 1);
+
+            tagList.forEach((tag, idx) => {
+                const isAtmTag = tag.toLowerCase() === "atm";
+                if (isAtmTag && !this.showAtmTag) {
+                    return;
+                }
+
+                const tagId = "TAG_" + tag;
+                const existing = existingNodeMap.get(tagId);
+
+                // Initial position around Core
+                const angle = (idx * tagAngleStep) + (Math.PI / 4);
+                const dist = 130;
+                const defaultX = Math.cos(angle) * dist;
+                const defaultY = Math.sin(angle) * dist;
+
+                const color = activeTagColors.get(tag) || "#14b8a6";
+                const tagNode = {
+                    id: tagId,
+                    label: "TAG: " + tag,
+                    type: "tag",
+                    tag: tag,
+                    color: color,
+                    radius: 11,
+                    status: "up",
+                    x: existing ? existing.x : defaultX,
+                    y: existing ? existing.y : defaultY,
+                    vx: existing ? existing.vx : 0,
+                    vy: existing ? existing.vy : 0,
+                    connectedCount: 0,
+                };
+
+                newNodes.push(tagNode);
+                tagNodeMap.set(tag, tagNode);
+
+                // Link: DC Core -> Tag Provider Node
+                newLinks.push({
+                    source: coreNode,
+                    target: tagNode,
+                    targetDist: this.linkDistance * 1.3,
+                    isTagCoreLink: true,
+                    color: color,
+                    isBackup: false,
+                });
+                coreNode.connectedCount++;
+                tagNode.connectedCount++;
+            });
+
+            // 4. Create Leaf Nodes for ATM / Backup / Devices
+            let hasAnyDown = false;
+            filteredMonitors.forEach((m, idx) => {
+                const nodeId = "MON_" + m.id;
+                const existing = existingNodeMap.get(nodeId);
+                const parentGroup = groupNodeMap.get(m.group);
+
+                const beat = this.getBeat(m.id);
+                let status = "up";
+                let ping = beat && beat.ping ? beat.ping : 0;
+                if (beat && beat.status === DOWN) {
+                    status = "down";
+                    hasAnyDown = true;
+                } else if (beat && beat.ping > 150) {
+                    status = "slow";
+                }
+
+                // Initial position around parent group if new
+                const angle = (idx * 0.7) + (Math.random() * 0.5);
+                const spread = 40 + (Math.random() * 30);
+                const defaultX = parentGroup ? parentGroup.x + Math.cos(angle) * spread : (Math.random() * 200 - 100);
+                const defaultY = parentGroup ? parentGroup.y + Math.sin(angle) * spread : (Math.random() * 200 - 100);
+
+                const radius = m.type === "KANTOR" ? 8 : (m.type === "BACKUP" ? 5.5 : 4.5);
+
+                const node = {
+                    id: nodeId,
+                    monitorId: m.id,
+                    label: m.name,
+                    group: m.group,
+                    hostname: m.hostname,
+                    tag: m.tag,
+                    type: m.type,
+                    status: status,
+                    ping: ping,
+                    radius: radius,
+                    x: existing ? existing.x : defaultX,
+                    y: existing ? existing.y : defaultY,
+                    vx: existing ? existing.vx : 0,
+                    vy: existing ? existing.vy : 0,
+                    connectedCount: 1,
+                };
+
+                newNodes.push(node);
+
+                // 1) Link ke Grup Kantor Cabang
+                if (parentGroup) {
+                    newLinks.push({
+                        source: parentGroup,
+                        target: node,
+                        targetDist: this.linkDistance,
+                        isBackup: m.type === "BACKUP",
+                    });
+                    parentGroup.connectedCount++;
+                }
+
+                // 2) Link ke Node Tag Provider (misal: LA, Telkom, ICON+, dsb.)
+                const monitorTags = new Set(m.tags || []);
+                if (m.tag && m.tag !== "Non-Tag") {
+                    monitorTags.add(m.tag);
+                }
+
+                monitorTags.forEach(t => {
+                    if (!this.showAtmTag && t.toLowerCase() === "atm") {
+                        return;
+                    }
+                    const tagNode = tagNodeMap.get(t);
+                    if (tagNode) {
+                        newLinks.push({
+                            source: tagNode,
+                            target: node,
+                            targetDist: this.linkDistance * 1.15,
+                            isTagLink: true,
+                            color: tagNode.color,
+                            isBackup: m.type === "BACKUP",
+                        });
+                        tagNode.connectedCount++;
+                        node.connectedCount++;
+                    }
+                });
+            });
+
+            // If any node is down, Core status reflects warning
+            coreNode.status = hasAnyDown ? "down" : "up";
+
+            this.nodes = newNodes;
+            this.links = newLinks;
+
+            // Generate particles along links
+            this.initParticles();
+        },
+
+        initParticles() {
+            this.particles = [];
+            this.links.forEach(link => {
+                if (link.target.status !== "down") {
+                    this.particles.push({
+                        link: link,
+                        t: Math.random(),
+                        speed: 0.003 + (Math.random() * 0.004),
+                    });
+                }
+            });
+        },
+
+        updateLinkDistances() {
+            this.links.forEach(l => {
+                if (l.source.type === "core") {
+                    l.targetDist = this.linkDistance * 1.5;
+                } else {
+                    l.targetDist = this.linkDistance;
+                }
+            });
+        },
+
+        reheatSimulation() {
+            this.nodes.forEach(n => {
+                if (n.type !== "core") {
+                    n.vx += (Math.random() - 0.5) * 5;
+                    n.vy += (Math.random() - 0.5) * 5;
+                }
+            });
+            this.isPhysicsActive = true;
+        },
+
+        resetCamera() {
+            const container = this.$refs.container;
+            if (container) {
+                const rect = container.getBoundingClientRect();
+                this.camera.x = rect.width / 2;
+                this.camera.y = rect.height / 2;
+                this.camera.scale = 0.95;
+            }
+        },
+
+        focusSearchedNode() {
+            if (!this.searchQuery) {return;}
+            const q = this.searchQuery.toLowerCase().trim();
+            const found = this.nodes.find(n => {
+                return n.label.toLowerCase().includes(q) ||
+                    (n.hostname && n.hostname.toLowerCase().includes(q));
+            });
+
+            if (found && this.$refs.container) {
+                const rect = this.$refs.container.getBoundingClientRect();
+                this.camera.x = (rect.width / 2) - (found.x * 1.5);
+                this.camera.y = (rect.height / 2) - (found.y * 1.5);
+                this.camera.scale = 1.5;
+                this.hoveredNode = found;
+            }
+        },
+
+        // ==========================================
+        // PHYSICS ENGINE LOOP (FORCE-DIRECTED 60 FPS)
+        // ==========================================
+        updatePhysics() {
+            if (!this.isPhysicsActive) {return;}
+
+            const nodes = this.nodes;
+            const links = this.links;
+            const nodeCount = nodes.length;
+
+            const kRepel = 2400;
+            const kSpring = 0.035;
+            const kGravity = 0.003;
+            const damping = 0.86;
+
+            // 1. Coulomb Repulsion between nodes
+            for (let i = 0; i < nodeCount; i++) {
+                const n1 = nodes[i];
+                for (let j = i + 1; j < nodeCount; j++) {
+                    const n2 = nodes[j];
+                    const dx = n2.x - n1.x;
+                    const dy = n2.y - n1.y;
+                    const distSq = dx * dx + dy * dy + 150;
+                    if (distSq < 90000) { // Limit repulsion radius for high performance
+                        const dist = Math.sqrt(distSq);
+                        const force = kRepel / distSq;
+                        const fx = (dx / dist) * force;
+                        const fy = (dy / dist) * force;
+
+                        n1.vx -= fx;
+                        n1.vy -= fy;
+                        n2.vx += fx;
+                        n2.vy += fy;
+                    }
+                }
+
+                // Center Gravity
+                n1.vx -= n1.x * kGravity;
+                n1.vy -= n1.y * kGravity;
+            }
+
+            // 2. Hooke Spring Attraction along links
+            for (let i = 0; i < links.length; i++) {
+                const link = links[i];
+                const src = link.source;
+                const tgt = link.target;
+                const dx = tgt.x - src.x;
+                const dy = tgt.y - src.y;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                const force = (dist - link.targetDist) * kSpring;
+                const fx = (dx / dist) * force;
+                const fy = (dy / dist) * force;
+
+                src.vx += fx;
+                src.vy += fy;
+                tgt.vx -= fx;
+                tgt.vy -= fy;
+            }
+
+            // 3. Apply velocity & friction
+            for (let i = 0; i < nodeCount; i++) {
+                const n = nodes[i];
+
+                // Core DC fixed or soft anchor at origin
+                if (n.type === "core" && this.draggedNode !== n) {
+                    n.x = 0;
+                    n.y = 0;
+                    n.vx = 0;
+                    n.vy = 0;
+                    continue;
+                }
+
+                // If currently dragged with mouse, position is pinned
+                if (this.draggedNode === n) {
+                    n.vx = 0;
+                    n.vy = 0;
+                    continue;
+                }
+
+                n.vx *= damping;
+                n.vy *= damping;
+
+                // Speed limit to avoid teleporting
+                const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+                const maxSpeed = 12;
+                if (speed > maxSpeed) {
+                    n.vx = (n.vx / speed) * maxSpeed;
+                    n.vy = (n.vy / speed) * maxSpeed;
+                }
+
+                n.x += n.vx;
+                n.y += n.vy;
+            }
+        },
+
+        // ==========================================
+        // RENDER LOOP (HTML5 CANVAS 2D)
+        // ==========================================
+        startRenderLoop() {
+            const render = () => {
+                this.updatePhysics();
+                this.draw();
+                this.animationFrameId = requestAnimationFrame(render);
+            };
+            this.animationFrameId = requestAnimationFrame(render);
+        },
+
+        draw() {
+            const canvas = this.$refs.canvas;
+            if (!canvas) {return;}
+            const ctx = canvas.getContext("2d");
+            const dpr = window.devicePixelRatio || 1;
+            const w = canvas.width / dpr;
+            const h = canvas.height / dpr;
+
+            ctx.save();
+            ctx.scale(dpr, dpr);
+
+            // 1. Background Fill
+            ctx.fillStyle = "#080c14";
+            ctx.fillRect(0, 0, w, h);
+
+            // Subtle Background Radial Glow
+            const bgGlow = ctx.createRadialGradient(this.camera.x, this.camera.y, 10, this.camera.x, this.camera.y, 450 * this.camera.scale);
+            bgGlow.addColorStop(0, "rgba(14, 30, 58, 0.35)");
+            bgGlow.addColorStop(1, "rgba(8, 12, 20, 0)");
+            ctx.fillStyle = bgGlow;
+            ctx.fillRect(0, 0, w, h);
+
+            // Apply Camera Transform
+            ctx.translate(this.camera.x, this.camera.y);
+            ctx.scale(this.camera.scale, this.camera.scale);
+
+            // Determine Highlighted Nodes and Links (Hover & Cascade Dimming)
+            const isHovering = !!this.hoveredNode;
+            const connectedSet = new Set();
+            if (this.hoveredNode) {
+                connectedSet.add(this.hoveredNode.id);
+                this.links.forEach(l => {
+                    if (l.source.id === this.hoveredNode.id) {connectedSet.add(l.target.id);}
+                    if (l.target.id === this.hoveredNode.id) {connectedSet.add(l.source.id);}
+                });
+            }
+
+            // Search filter highlighting
+            const isSearching = !!this.searchQuery;
+            const q = this.searchQuery.toLowerCase().trim();
+
+            // 2. DRAW LINKS
+            for (let i = 0; i < this.links.length; i++) {
+                const link = this.links[i];
+                const src = link.source;
+                const tgt = link.target;
+
+                const isConnected = isHovering && (connectedSet.has(src.id) && connectedSet.has(tgt.id));
+                let alpha = isHovering ? (isConnected ? 0.85 : 0.07) : 0.25;
+
+                ctx.beginPath();
+                ctx.moveTo(src.x, src.y);
+                ctx.lineTo(tgt.x, tgt.y);
+
+                if (link.isTagLink || link.isTagCoreLink) {
+                    ctx.setLineDash([2, 4]);
+                    const tagColor = link.color || "#14b8a6";
+                    ctx.strokeStyle = isConnected ? this.rgbaFromHex(tagColor, alpha * 1.5) : this.rgbaFromHex(tagColor, alpha * 0.6);
+                    ctx.lineWidth = isConnected ? 2.2 : 0.7;
+                } else if (link.isBackup) {
+                    ctx.setLineDash([4, 4]);
+                    ctx.strokeStyle = `rgba(245, 158, 11, ${alpha})`;
+                    ctx.lineWidth = isConnected ? 2 : 1;
+                } else if (tgt.status === "down") {
+                    ctx.setLineDash([]);
+                    ctx.strokeStyle = `rgba(239, 68, 68, ${alpha * 1.5})`;
+                    ctx.lineWidth = isConnected ? 2.5 : 1.2;
+                } else {
+                    ctx.setLineDash([]);
+                    ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
+                    ctx.lineWidth = isConnected ? 2 : 0.8;
+                }
+
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // 3. DRAW PARTICLES (LINK FLOW)
+            if (this.enableParticles) {
+                const now = performance.now();
+                ctx.fillStyle = "#38bdf8";
+
+                for (let i = 0; i < this.particles.length; i++) {
+                    const p = this.particles[i];
+                    p.t = (p.t + p.speed) % 1;
+
+                    const src = p.link.source;
+                    const tgt = p.link.target;
+                    const px = src.x + (tgt.x - src.x) * p.t;
+                    const py = src.y + (tgt.y - src.y) * p.t;
+
+                    const isDimmed = isHovering && (!connectedSet.has(src.id) || !connectedSet.has(tgt.id));
+                    if (!isDimmed) {
+                        ctx.beginPath();
+                        ctx.arc(px, py, 1.8, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+
+            // 4. DRAW NODES
+            const timePulse = Math.sin(Date.now() / 250);
+
+            for (let i = 0; i < this.nodes.length; i++) {
+                const node = this.nodes[i];
+                const isHovered = this.hoveredNode && this.hoveredNode.id === node.id;
+                const isConnected = isHovering && connectedSet.has(node.id);
+                const matchesSearch = isSearching && (
+                    node.label.toLowerCase().includes(q) ||
+                    (node.hostname && node.hostname.toLowerCase().includes(q))
+                );
+
+                let alpha = 1;
+                if (isHovering && !isConnected) {
+                    alpha = 0.12;
+                } else if (isSearching && !matchesSearch) {
+                    alpha = 0.15;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = alpha;
+
+                // DOWN Pulsing Outer Ring
+                if (node.status === "down") {
+                    ctx.beginPath();
+                    const pulseRadius = node.radius + 4 + (timePulse * 2.5);
+                    ctx.arc(node.x, node.y, Math.max(pulseRadius, node.radius), 0, Math.PI * 2);
+                    ctx.strokeStyle = "rgba(239, 68, 68, 0.7)";
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                // Highlighted Halo for Search matches or Active Hover
+                if (matchesSearch || isHovered) {
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, node.radius + 6, 0, Math.PI * 2);
+                    ctx.strokeStyle = "rgba(56, 189, 248, 0.8)";
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                // Node Base Circle
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+
+                if (node.type === "core") {
+                    ctx.fillStyle = node.status === "down" ? "#ef4444" : "#0284c7";
+                    ctx.fill();
+                    ctx.strokeStyle = "#38bdf8";
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                } else if (node.type === "kantor") {
+                    ctx.fillStyle = node.status === "down" ? "#ef4444" : "#8b5cf6";
+                    ctx.fill();
+                    ctx.strokeStyle = "#a78bfa";
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                } else if (node.type === "tag") {
+                    ctx.fillStyle = node.color || "#14b8a6";
+                    ctx.fill();
+                    ctx.strokeStyle = "#ffffff";
+                    ctx.lineWidth = 2.5;
+                    ctx.stroke();
+                } else if (node.type === "BACKUP") {
+                    ctx.fillStyle = node.status === "down" ? "#ef4444" : "#f59e0b";
+                    ctx.fill();
+                    ctx.strokeStyle = "#fbbf24";
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                } else {
+                    // ATM or general endpoint
+                    if (node.status === "down") {
+                        ctx.fillStyle = "#ef4444";
+                    } else if (node.status === "slow") {
+                        ctx.fillStyle = "#eab308";
+                    } else {
+                        ctx.fillStyle = "#22c55e";
+                    }
+                    ctx.fill();
+                }
+
+                // 5. DRAW LABELS
+                // ==========================================
+                // 5. ATURAN TAMPILAN LABEL (OBSIDIAN STYLE)
+                // - Zoom jauh: Semua nama ATM/Backup TIDAK KELUAR (bersih seperti Image 1)
+                // - Zoom mendekat (scale >= 1.2): BARU KELUAR NAMA, dan HANYA untuk yang DOWN
+                // - Link yang UP tetap tidak keluar namanya saat zoom mendekat
+                // ==========================================
+                const isZoomedClose = this.camera.scale >= 1.2;
+                const isEndpoint = node.type === "ATM" || node.type === "BACKUP";
+
+                let shouldDrawLabel = false;
+                if (this.alwaysShowLabels || isHovered || matchesSearch) {
+                    shouldDrawLabel = true;
+                } else if (node.type === "core" || node.type === "tag") {
+                    shouldDrawLabel = this.camera.scale >= 0.7;
+                } else if (node.type === "kantor") {
+                    shouldDrawLabel = this.camera.scale >= 0.75;
+                } else if (isEndpoint) {
+                    shouldDrawLabel = isZoomedClose && node.status === "down";
+                }
+
+                if (shouldDrawLabel && alpha > 0.3) {
+                    ctx.font = (node.type === "core" || node.type === "tag") ? "bold 11px monospace" : (node.type === "kantor" ? "bold 10px monospace" : "9px monospace");
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "top";
+
+                    // Label shadow for contrast
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+                    ctx.fillText(node.label, node.x + 1, node.y + node.radius + 4);
+
+                    ctx.fillStyle = isHovered ? "#38bdf8" : (matchesSearch ? "#facc15" : (node.status === "down" ? "#fca5a5" : "#e2e8f0"));
+                    ctx.fillText(node.label, node.x, node.y + node.radius + 3);
+                }
+
+                ctx.restore();
+            }
+
+            ctx.restore();
+        },
+
+        // ==========================================
+        // MOUSE & INTERACTION HANDLERS
+        // ==========================================
+        getCanvasMouseWorld(e) {
+            const rect = this.$refs.canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const worldX = (mouseX - this.camera.x) / this.camera.scale;
+            const worldY = (mouseY - this.camera.y) / this.camera.scale;
+
+            return { worldX, worldY, clientX: e.clientX, clientY: e.clientY };
+        },
+
+        findNodeAt(worldX, worldY) {
+            for (let i = this.nodes.length - 1; i >= 0; i--) {
+                const n = this.nodes[i];
+                const dx = worldX - n.x;
+                const dy = worldY - n.y;
+                const hitRadius = Math.max(n.radius + 5, 8);
+                if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+                    return n;
+                }
+            }
+            return null;
+        },
+
+        onMouseDown(e) {
+            const { worldX, worldY } = this.getCanvasMouseWorld(e);
+            const hit = this.findNodeAt(worldX, worldY);
+
+            if (hit) {
+                this.isDragging = true;
+                this.draggedNode = hit;
+                this.hoveredNode = hit;
+            } else {
+                this.isPanning = true;
+                this.panStart = { x: e.clientX - this.camera.x, y: e.clientY - this.camera.y };
+            }
+        },
+
+        onMouseMove(e) {
+            const { worldX, worldY, clientX, clientY } = this.getCanvasMouseWorld(e);
+
+            if (this.isDragging && this.draggedNode) {
+                this.draggedNode.x = worldX;
+                this.draggedNode.y = worldY;
+                this.draggedNode.vx = 0;
+                this.draggedNode.vy = 0;
+                this.tooltipPos = { x: clientX, y: clientY };
+                return;
+            }
+
+            if (this.isPanning) {
+                this.camera.x = e.clientX - this.panStart.x;
+                this.camera.y = e.clientY - this.panStart.y;
+                return;
+            }
+
+            // Hover check
+            const hit = this.findNodeAt(worldX, worldY);
+            if (hit !== this.hoveredNode) {
+                this.hoveredNode = hit;
+            }
+            if (hit) {
+                this.tooltipPos = { x: clientX, y: clientY };
+            }
+        },
+
+        onMouseUp() {
+            this.isDragging = false;
+            this.draggedNode = null;
+            this.isPanning = false;
+        },
+
+        onMouseLeave() {
+            this.isDragging = false;
+            this.draggedNode = null;
+            this.isPanning = false;
+            this.hoveredNode = null;
+        },
+
+        onWheel(e) {
+            e.preventDefault();
+            const rect = this.$refs.canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const zoomFactor = e.deltaY < 0 ? 1.12 : 0.88;
+            const newScale = Math.min(Math.max(this.camera.scale * zoomFactor, 0.25), 4.0);
+
+            // Zoom centered at mouse position
+            this.camera.x = mouseX - (mouseX - this.camera.x) * (newScale / this.camera.scale);
+            this.camera.y = mouseY - (mouseY - this.camera.y) * (newScale / this.camera.scale);
+            this.camera.scale = newScale;
+        },
+
+        toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        },
+
+        rgbaFromHex(hex, alpha) {
+            const normalized = String(hex || "#14b8a6").replace("#", "");
+            const value = normalized.length === 3
+                ? normalized.split("").map(c => c + c).join("")
+                : normalized;
+            const number = parseInt(value, 16);
+            if (Number.isNaN(number)) {
+                return `rgba(20, 184, 166, ${alpha})`;
+            }
+            const red = (number >> 16) & 255;
+            const green = (number >> 8) & 255;
+            const blue = number & 255;
+            return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+        },
+
+        getBadgeClass(node) {
+            if (node.type === "core") {return "bg-primary";}
+            if (node.type === "kantor") {return "bg-purple-subtle text-purple";}
+            if (node.type === "tag") {return "bg-success-subtle text-success";}
+            if (node.type === "BACKUP") {return "bg-warning-subtle text-warning";}
+            return "bg-info-subtle text-info";
+        },
+
+        getStatusTextColor(node) {
+            if (node.status === "down") {return "text-danger";}
+            if (node.status === "slow") {return "text-warning";}
+            return "text-primary";
+        },
+    },
+};
+</script>
+
+<style scoped>
+.noc-graph-page {
+    background-color: #080c14;
+    color: #e2e8f0;
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    user-select: none;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* TOP HEADER */
+.noc-graph-header {
+    background: #0f172a;
+    border-bottom: 1px solid #1e293b;
+    padding: 0.75rem 1.25rem;
+    z-index: 20;
+}
+
+.noc-logo-badge {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
+}
+
+.noc-header-icon {
+    font-size: 16px;
+}
+
+.noc-title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+}
+
+.noc-subtitle {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.noc-badge-obsidian {
+    background: #1e293b;
+    color: #a855f7;
+    border: 1px solid #475569;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    font-family: monospace;
+}
+
+.noc-btn-secondary {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    color: #cbd5e1;
+    transition: all 0.15s ease;
+}
+
+.noc-btn-secondary:hover {
+    background-color: #334155;
+    color: #ffffff;
+}
+
+.noc-clock-box {
+    background: #0b0f19;
+    border: 1px solid #334155;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+}
+
+.noc-dot-live {
+    width: 7px;
+    height: 7px;
+    background-color: #22c55e;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #22c55e;
+    animation: noc-pulse 1.8s infinite;
+}
+
+.noc-dot-blue {
+    width: 8px;
+    height: 8px;
+    background-color: #38bdf8;
+    border-radius: 50%;
+    box-shadow: 0 0 6px #38bdf8;
+}
+
+@keyframes noc-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.9); }
+}
+
+/* CANVAS WRAPPER */
+.noc-canvas-wrapper {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    cursor: grab;
+}
+
+.noc-canvas-wrapper:active {
+    cursor: grabbing;
+}
+
+.noc-graph-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* FLOATING CONTROLS (OBSIDIAN STYLE) */
+.noc-floating-panel {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 320px;
+    max-height: calc(100vh - 120px);
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(12px);
+    border: 1px solid #334155;
+    border-radius: 10px;
+    z-index: 10;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    transition: all 0.25s ease;
+    overflow: hidden;
+}
+
+.panel-collapsed {
+    width: 220px;
+    max-height: 48px;
+    overflow: hidden;
+}
+
+.noc-panel-toggle {
+    min-width: 42px;
+    line-height: 1.2;
+}
+
+.noc-panel-content {
+    overflow-y: auto;
+    max-height: calc(100vh - 170px);
+}
+
+/* FLOATING LEGEND (BOTTOM BAR) */
+.noc-floating-legend {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(10px);
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 6px 14px;
+    z-index: 10;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.legend-circle {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.legend-circle.core { background: #0284c7; border: 1.5px solid #38bdf8; }
+.legend-circle.kantor { background: #8b5cf6; }
+.legend-circle.tag { background: #14b8a6; border: 1px solid #5eead4; }
+.legend-circle.atm { background: #22c55e; }
+.legend-circle.backup { background: #f59e0b; }
+
+.legend-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+.legend-dot.up { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+.legend-dot.slow { background: #eab308; box-shadow: 0 0 6px #eab308; }
+.legend-dot.down { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+
+/* HOVER TOOLTIP */
+.noc-graph-tooltip {
+    position: fixed;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid #475569;
+    border-radius: 8px;
+    padding: 8px 12px;
+    min-width: 180px;
+    z-index: 30;
+    pointer-events: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    font-size: 0.8rem;
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+</style>

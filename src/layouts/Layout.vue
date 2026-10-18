@@ -13,7 +13,7 @@
         </div>
 
         <!-- Desktop header -->
-        <header v-if="!$root.isMobile" class="d-flex flex-wrap justify-content-center py-3 mb-3 border-bottom">
+        <header v-if="!$root.isMobile && !$route.name?.startsWith('Noc')" class="d-flex flex-wrap justify-content-center py-3 mb-3 border-bottom">
             <router-link
                 to="/dashboard"
                 class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-dark text-decoration-none"
@@ -43,6 +43,18 @@
                     <router-link to="/dashboard" class="nav-link">
                         <font-awesome-icon icon="tachometer-alt" />
                         {{ $t("Dashboard") }}
+                    </router-link>
+                </li>
+                <li v-if="$root.loggedIn" class="nav-item me-2">
+                    <router-link to="/noc" class="nav-link">
+                        <font-awesome-icon icon="network-wired" />
+                        NOC Dashboard
+                    </router-link>
+                </li>
+                <li v-if="$root.loggedIn" class="nav-item me-2">
+                    <router-link to="/noc/graph" class="nav-link">
+                        <font-awesome-icon icon="project-diagram" />
+                        Graph View
                     </router-link>
                 </li>
                 <li v-if="$root.loggedIn" class="nav-item">
@@ -118,7 +130,7 @@
         </header>
 
         <!-- Mobile header -->
-        <header v-else class="d-flex flex-wrap justify-content-center pt-2 pb-2 mb-3">
+        <header v-else-if="$root.isMobile && !$route.name?.startsWith('Noc')" class="d-flex flex-wrap justify-content-center pt-2 pb-2 mb-3">
             <router-link to="/dashboard" class="d-flex align-items-center text-dark text-decoration-none">
                 <object class="bi" width="40" height="40" data="/icon.svg" />
                 <span class="fs-4 title ms-2">Uptime Kuma</span>
@@ -126,13 +138,13 @@
         </header>
 
         <main>
-            <router-view v-if="$root.loggedIn" />
-            <Login v-if="!$root.loggedIn && $root.allowLoginDialog" />
+            <router-view v-if="$root.loggedIn || $route.name?.startsWith('Noc')" />
+            <Login v-if="!$root.loggedIn && $root.allowLoginDialog && !$route.name?.startsWith('Noc')" />
         </main>
 
         <!-- Mobile Only -->
-        <div v-if="$root.isMobile" style="width: 100%; height: calc(60px + env(safe-area-inset-bottom))" />
-        <nav v-if="$root.isMobile && $root.loggedIn" class="bottom-nav">
+        <div v-if="$root.isMobile && !$route.name?.startsWith('Noc')" style="width: 100%; height: calc(60px + env(safe-area-inset-bottom))" />
+        <nav v-if="$root.isMobile && $root.loggedIn && !$route.name?.startsWith('Noc')" class="bottom-nav">
             <router-link to="/dashboard" class="nav-link">
                 <div><font-awesome-icon icon="tachometer-alt" /></div>
                 {{ $t("Home") }}

@@ -29,3 +29,7 @@ extra/exe-builder/obj
 .vs
 .vscode
 .devcontainer
+.agents
+.codex
+.gemini
+.github/hooks

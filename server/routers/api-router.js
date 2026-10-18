@@ -43,6 +43,27 @@ router.get("/api/entry-page", async (request, response) => {
     response.json(result);
 });
 
+router.get("/api/noc/data", async (request, response) => {
+    allowDevAllOrigin(response);
+    allowAllOrigin(response);
+    try {
+        let monitorList = await server.getMonitorJSONList();
+        let lastHeartbeatList = {};
+        if (server.lastHeartbeatList) {
+            for (let id in server.lastHeartbeatList) {
+                lastHeartbeatList[id] = server.lastHeartbeatList[id];
+            }
+        }
+        response.json({
+            ok: true,
+            monitorList,
+            lastHeartbeatList,
+        });
+    } catch (e) {
+        response.status(500).json({ ok: false, msg: e.message });
+    }
+});
+
 router.all("/api/push/:pushToken", async (request, response) => {
     try {
         let pushToken = request.params.pushToken;

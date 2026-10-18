@@ -18,7 +18,7 @@
         "lint": "node --run lint:js && node --run lint:style",
         "fmt": "prettier --write \"**/*.{js,ts,vue,css,scss,json,md,yml,yaml}\"",
         "lint:prod": "node --run lint:js-prod && node --run lint:style",
-        "dev": "concurrently -k -r \"wait-on tcp:3000 && node --run start-server-dev \" \"node --run start-frontend-dev\"",
+        "dev": "concurrently -k -r \"node --run start-server-dev\" \"wait-on tcp:3001 && node --run start-frontend-dev\"",
         "start-frontend-dev": "cross-env NODE_ENV=development vite --host",
         "start": "node --run start-server",
         "start-server": "node --import=tsx server/server.js",

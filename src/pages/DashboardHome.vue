@@ -1,9 +1,15 @@
 <template>
     <transition ref="tableContainer" name="slide-fade" appear>
         <div v-if="$route.name === 'DashboardHome'">
-            <h1 class="mb-3">
-                {{ $t("Quick Stats") }}
-            </h1>
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h1 class="mb-0">
+                    {{ $t("Quick Stats") }}
+                </h1>
+                <router-link to="/noc" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1.5 font-mono">
+                    <font-awesome-icon icon="network-wired" />
+                    <span>Mode NOC Executive</span>
+                </router-link>
+            </div>
 
             <div class="shadow-box big-padding text-center mb-3">
                 <div class="row">

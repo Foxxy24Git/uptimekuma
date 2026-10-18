@@ -1,0 +1,7093 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uptime Kuma - Network Operations Center (NOC)</title>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        kuma: {
+                            green: '#5cdd8b',
+                            red: '#dc3545',
+                            warning: '#f8a306',
+                            canvas: '#090c12',
+                            card: '#111622',
+                            cardHover: '#161c2b',
+                            border: '#1e2638',
+                            textMuted: '#828e9e',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #232d42 #0b0f17;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #090c12;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #232d42;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #33405c;
+        }
+        .tabular-num {
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+<body class="bg-[#090c12] text-[#e2e8f0] font-sans min-h-screen antialiased selection:bg-[#5cdd8b]/20 selection:text-[#5cdd8b]">
+
+    <!-- MINIMALIST HEADER -->
+    <header class="sticky top-0 z-40 bg-[#090c12]/95 backdrop-blur border-b border-[#1b2234] px-4 lg:px-8 py-3">
+        <div class="max-w-[1520px] mx-auto flex flex-wrap items-center justify-between gap-4">
+            
+            <!-- Logo & Brand -->
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-[#5cdd8b]/10 border border-[#5cdd8b]/30 flex items-center justify-center text-[#5cdd8b]">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-semibold tracking-tight text-white">UPTIME KUMA</span>
+                        <span class="text-[10px] uppercase font-mono tracking-wider px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-400">NOC Executive</span>
+                    </div>
+                    <p class="text-[11px] text-[#828e9e]">Monitoring ATM & Jaringan Kantor Cabang</p>
+                </div>
+            </div>
+
+            <!-- Controls, Realtime Clock & Actions -->
+            <div class="flex items-center gap-3">
+                
+                <!-- Live Clock -->
+                <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#111622] border border-[#1e2638] text-xs font-mono">
+                    <span class="w-2 h-2 rounded-full bg-[#5cdd8b]"></span>
+                    <span id="liveClock" class="tabular-num text-slate-200">14:45:10 WIB</span>
+                    <span class="text-slate-500">|</span>
+                    <span id="liveDate" class="text-slate-400 text-[11px]">17 Okt 2026</span>
+                </div>
+
+                <!-- Simulation Toggle -->
+                <button onclick="simulateToggleOutage()" class="px-3 py-1.5 rounded-lg bg-[#111622] border border-[#1e2638] hover:border-slate-600 text-xs text-slate-300 hover:text-white transition-colors flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    <span>Simulasi Gangguan</span>
+                </button>
+
+                <!-- Fullscreen Toggle -->
+                <button onclick="toggleFullScreen()" class="p-2 rounded-lg bg-[#111622] border border-[#1e2638] hover:border-slate-600 text-slate-400 hover:text-white transition-colors" title="Mode TV / Full Screen">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0 0l-5-5m-7 11l-5 5m0 0h4m-4 0v-4m16 4l-5-5m5 5v-4m0 4h-4"></path></svg>
+                </button>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- MAIN BODY -->
+    <main class="max-w-[1520px] mx-auto px-4 lg:px-8 py-6 space-y-6">
+
+        <!-- SCOPE BADGE & DYNAMIC CONTEXT -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-[#828e9e]">Lingkup Data:</span>
+                <span id="scopeBadge" class="text-xs font-mono font-medium px-2.5 py-0.5 rounded-full bg-[#111622] border border-[#1e2638] text-slate-200">
+                    Seluruh Wilayah (32 Grup) • Semua Provider
+                </span>
+            </div>
+            <div id="resetScopeContainer" class="hidden">
+                <button onclick="resetFilters()" class="text-xs text-[#5cdd8b] hover:underline flex items-center gap-1">
+                    <span>Kembali ke Seluruh Wilayah</span> &times;
+                </button>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- [IMAGE 1] 4 KPI CARDS - DILETAKKAN PALING ATAS           -->
+        <!-- MENAMPILKAN DATA DINAMIS SESUAI GRUP & TAG TERPILIH      -->
+        <!-- ======================================================== -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <!-- CARD 1: TOTAL ATM -->
+            <div class="bg-[#111622] border border-[#1e2638] rounded-2xl p-5 hover:border-[#2a354c] transition-colors relative">
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-semibold text-[#828e9e] uppercase tracking-wider">INFRASTRUKTUR ATM</span>
+                    <div class="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                    </div>
+                </div>
+                <div class="mt-3 flex items-baseline gap-2">
+                    <span id="statTotalAtm" class="text-3xl font-extrabold text-white font-mono tabular-num">322</span>
+                    <span class="text-xs text-[#828e9e]">Unit ATM Terdaftar</span>
+                </div>
+                <div class="mt-4 pt-3 border-t border-[#1a2130] flex items-center justify-between text-xs font-mono tabular-num">
+                    <div class="flex items-center gap-1.5 text-[#5cdd8b]">
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#5cdd8b]"></span>
+                        <span id="statAtmOnline">318</span> Online
+                    </div>
+                    <div class="flex items-center gap-1.5 text-[#dc3545]">
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#dc3545]"></span>
+                        <span id="statAtmOffline">4</span> Offline
+                    </div>
+                    <div class="text-[#828e9e]" id="statAtmPercent">98.8%</div>
+                </div>
+                <!-- Clean Thin Bar -->
+                <div class="w-full bg-[#0a0d14] h-1.5 rounded-full mt-2.5 overflow-hidden">
+                    <div id="barAtmPercent" class="bg-[#5cdd8b] h-full rounded-full transition-all duration-300" style="width: 98.8%"></div>
+                </div>
+            </div>
+
+            <!-- CARD 2: JARINGAN KANTOR CABANG -->
+            <div class="bg-[#111622] border border-[#1e2638] rounded-2xl p-5 hover:border-[#2a354c] transition-colors relative">
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-semibold text-[#828e9e] uppercase tracking-wider">JARINGAN KANTOR CABANG</span>
+                    <div class="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                    </div>
+                </div>
+                <div class="mt-3 flex items-baseline gap-2">
+                    <span id="statTotalOffice" class="text-3xl font-extrabold text-white font-mono tabular-num">3</span>
+                    <span class="text-xs text-[#828e9e]">Kantor (KC/KCP/KK)</span>
+                </div>
+                <div class="mt-4 pt-3 border-t border-[#1a2130] flex items-center justify-between text-xs font-mono tabular-num">
+                    <div class="flex items-center gap-1.5 text-[#5cdd8b]">
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#5cdd8b]"></span>
+                        <span id="statOfficeOnline">3</span> Online
+                    </div>
+                    <div class="flex items-center gap-1.5 text-[#828e9e]">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+                        <span id="statOfficeOffline">0</span> Offline
+                    </div>
+                    <div class="text-[#828e9e]" id="statOfficePercent">100.0%</div>
+                </div>
+                <div class="w-full bg-[#0a0d14] h-1.5 rounded-full mt-2.5 overflow-hidden">
+                    <div id="barOfficePercent" class="bg-[#5cdd8b] h-full rounded-full transition-all duration-300" style="width: 100%"></div>
+                </div>
+            </div>
+
+            <!-- CARD 3: KONEKSI LINK ONLINE (UP) -->
+            <div class="bg-[#111622] border border-[#1e2638] rounded-2xl p-5 hover:border-[#2a354c] transition-colors relative">
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-semibold text-[#828e9e] uppercase tracking-wider">KONEKSI LINK ONLINE (UP)</span>
+                    <div class="w-9 h-9 rounded-xl bg-[#5cdd8b]/10 border border-[#5cdd8b]/20 flex items-center justify-center text-[#5cdd8b]">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    </div>
+                </div>
+                <div class="mt-3 flex items-baseline gap-2">
+                    <span id="statTotalUp" class="text-3xl font-extrabold text-[#5cdd8b] font-mono tabular-num">321</span>
+                    <span class="text-xs text-[#828e9e]">Link Normal</span>
+                </div>
+                <div class="mt-4 pt-3 border-t border-[#1a2130] flex items-center justify-between text-xs">
+                    <span class="text-[#828e9e]">SLA Availability:</span>
+                    <span id="statGlobalSLA" class="text-[#5cdd8b] font-mono font-semibold tabular-num">98.77%</span>
+                </div>
+                <div class="w-full bg-[#0a0d14] h-1.5 rounded-full mt-2.5 overflow-hidden">
+                    <div id="barGlobalUp" class="bg-[#5cdd8b] h-full rounded-full transition-all duration-300" style="width: 98.7%"></div>
+                </div>
+            </div>
+
+            <!-- CARD 4: LINK GANGGUAN (DOWN) -->
+            <div id="kpiDownCard" class="bg-[#111622] border border-[#dc3545]/40 rounded-2xl p-5 hover:border-[#dc3545] transition-colors relative">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#dc3545]"></span>
+                        <span class="text-[11px] font-semibold text-[#dc3545] uppercase tracking-wider">LINK GANGGUAN (DOWN)</span>
+                    </div>
+                    <div class="w-9 h-9 rounded-xl bg-[#dc3545]/10 border border-[#dc3545]/20 flex items-center justify-center text-[#dc3545]">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    </div>
+                </div>
+                <div class="mt-3 flex items-baseline gap-2">
+                    <span id="statTotalDown" class="text-3xl font-extrabold text-[#dc3545] font-mono tabular-num">4</span>
+                    <span class="text-xs text-[#dc3545]">Titik Putus Segera Dicek!</span>
+                </div>
+                <div class="mt-4 pt-3 border-t border-[#1a2130] flex items-center justify-between text-xs">
+                    <span class="text-[#828e9e]">Prioritas Penanganan:</span>
+                    <span id="priorityBadge" class="text-[#dc3545] font-mono text-[11px] font-semibold uppercase px-2 py-0.5 rounded bg-[#dc3545]/10 border border-[#dc3545]/20">TINGGI (URGENT)</span>
+                </div>
+                <div class="w-full bg-[#0a0d14] h-1.5 rounded-full mt-2.5 overflow-hidden">
+                    <div id="barGlobalDown" class="bg-[#dc3545] h-full rounded-full transition-all duration-300" style="width: 1.2%"></div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- 2. CRITICAL ALERT BOX (HUMAN RECOGNITION AT A GLANCE)    -->
+        <!-- ======================================================== -->
+        <section id="criticalAlertSection" class="space-y-3">
+            <!-- Rendered by JS -->
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- 3. MINIMALIST FILTER BAR                                  -->
+        <!-- ======================================================== -->
+        <section class="bg-[#111622] border border-[#1e2638] rounded-2xl p-4 space-y-3">
+            
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                
+                <!-- Search Input -->
+                <div class="relative flex-1 max-w-md">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </span>
+                    <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Cari nama ATM / Kantor (Friendly Name), IP, atau wilayah..." 
+                           class="w-full pl-9 pr-4 py-2 bg-[#090c12] border border-[#1e2638] rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-500 transition-colors">
+                </div>
+
+                <!-- Status Segmented Control -->
+                <div class="flex items-center gap-1 p-1 bg-[#090c12] border border-[#1e2638] rounded-xl text-xs">
+                    <button onclick="setStatusFilter('ALL')" id="filterStatusAll" class="px-3 py-1.5 rounded-lg font-medium bg-[#161c2b] text-white transition-colors">
+                        Semua (<span id="countStatusAll" class="tabular-num">325</span>)
+                    </button>
+                    <button onclick="setStatusFilter('UP')" id="filterStatusUp" class="px-3 py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#5cdd8b]"></span>
+                        UP (<span id="countStatusUp" class="tabular-num text-[#5cdd8b]">321</span>)
+                    </button>
+                    <button onclick="setStatusFilter('DOWN')" id="filterStatusDown" class="px-3 py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#dc3545]"></span>
+                        DOWN (<span id="countStatusDown" class="tabular-num text-[#dc3545]">4</span>)
+                    </button>
+                </div>
+
+                <!-- Type Selector (ATM vs Kantor) -->
+                <select id="typeFilter" onchange="applyFilters()" class="bg-[#090c12] border border-[#1e2638] text-xs rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-slate-500">
+                    <option value="ALL">Semua Tipe (ATM & Kantor)</option>
+                    <option value="ATM">Khusus Unit ATM</option>
+                    <option value="KANTOR">Khusus Kantor Cabang (KC/KCP/KK)</option>
+                </select>
+
+            </div>
+
+            <!-- Provider Tag Buttons & Location Group Dropdown -->
+            <div class="pt-3 border-t border-[#182030] flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs">
+                
+                <!-- Provider Tags -->
+                <div class="flex items-center flex-wrap gap-1.5">
+                    <span class="text-[#828e9e] text-[11px] font-medium mr-1">Tag Jaringan:</span>
+                    
+                    <button onclick="setTagFilter('ALL')" id="tagBtn-ALL" class="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white/10 text-white border border-white/20 transition-colors">Semua Provider</button>
+
+                    <button onclick="setTagFilter('Telkom')" id="tagBtn-Telkom" class="px-2.5 py-1 rounded-md text-[11px] font-medium bg-[#111622] text-slate-400 border border-[#1e2638] hover:border-slate-600 hover:text-slate-200 transition-colors">Telkom</button>
+
+                    <button onclick="setTagFilter('ICON+')" id="tagBtn-ICON+" class="px-2.5 py-1 rounded-md text-[11px] font-medium bg-[#111622] text-slate-400 border border-[#1e2638] hover:border-slate-600 hover:text-slate-200 transition-colors">ICON+</button>
+
+                    <button onclick="setTagFilter('LA')" id="tagBtn-LA" class="px-2.5 py-1 rounded-md text-[11px] font-medium bg-[#111622] text-slate-400 border border-[#1e2638] hover:border-slate-600 hover:text-slate-200 transition-colors">LA</button>
+
+                    <button onclick="setTagFilter('Non-Tag')" id="tagBtn-Non-Tag" class="px-2.5 py-1 rounded-md text-[11px] font-medium bg-[#111622] text-slate-400 border border-[#1e2638] hover:border-slate-600 hover:text-slate-200 transition-colors">Tanpa Tag ISP</button>
+
+                </div>
+
+                <!-- Group Location Dropdown (32 Groups from Database) -->
+                <div class="flex items-center gap-2">
+                    <span class="text-[#828e9e] text-[11px] font-medium whitespace-nowrap">Grup Wilayah:</span>
+                    <select id="groupFilter" onchange="applyFilters()" class="bg-[#090c12] border border-[#1e2638] text-xs rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-slate-500 max-w-xs truncate">
+                        <option value="ALL">Semua Grup Wilayah (32 Cabang)</option>
+                        <option value="ALAHAN PANJANG">ALAHAN PANJANG</option>
+                        <option value="BANDUNG">BANDUNG</option>
+                        <option value="BUKITTINGGI">BUKITTINGGI</option>
+                        <option value="Batusangkar">Batusangkar</option>
+                        <option value="CABANG UTAMA">CABANG UTAMA</option>
+                        <option value="DARMASRAYA">DARMASRAYA</option>
+                        <option value="JAKARTA">JAKARTA</option>
+                        <option value="LINTAU">LINTAU</option>
+                        <option value="Lainnya">Lainnya</option>
+                        <option value="Lubuk Alung">Lubuk Alung</option>
+                        <option value="Lubuk Basung">Lubuk Basung</option>
+                        <option value="Lubuk Gadang">Lubuk Gadang</option>
+                        <option value="Lubuk Sikaping">Lubuk Sikaping</option>
+                        <option value="MATRAMAN">MATRAMAN</option>
+                        <option value="MENTAWAI">MENTAWAI</option>
+                        <option value="Muaro Labuh">Muaro Labuh</option>
+                        <option value="PADANG PANJANG">PADANG PANJANG</option>
+                        <option value="PAINAN">PAINAN</option>
+                        <option value="PARIAMAN">PARIAMAN</option>
+                        <option value="PASAR RAYA">PASAR RAYA</option>
+                        <option value="PAYAKUMBUH">PAYAKUMBUH</option>
+                        <option value="PEKANBARU">PEKANBARU</option>
+                        <option value="SAWAHLUNTO">SAWAHLUNTO</option>
+                        <option value="SITEBA">SITEBA</option>
+                        <option value="SOLOK">SOLOK</option>
+                        <option value="SYARIAH PADANG">SYARIAH PADANG</option>
+                        <option value="Sijunjung">Sijunjung</option>
+                        <option value="Simpang empat">Simpang empat</option>
+                        <option value="TAPAN">TAPAN</option>
+                        <option value="TAPUS">TAPUS</option>
+                        <option value="Ujung Gading">Ujung Gading</option>
+                        <option value="Web Service">Web Service</option>
+                    </select>
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- 4. REGIONAL & PROVIDER HEALTH SUMMARY                     -->
+        <!-- ======================================================== -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            
+            <!-- Left: Regional Summary -->
+            <div class="lg:col-span-2 bg-[#111622] border border-[#1e2638] rounded-2xl p-5 space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-xs font-bold text-white uppercase tracking-wider">Status Per Grup Wilayah (Cabang)</h2>
+                        <p class="text-[11px] text-[#828e9e] mt-0.5">Ringkasan unit online dan offline di setiap area kerja</p>
+                    </div>
+                    <span class="text-[11px] text-slate-400 font-mono">32 Wilayah Terdaftar</span>
+                </div>
+
+                <div id="regionalBreakdownContainer" class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+            <!-- Right: Provider Tag Summary -->
+            <div class="bg-[#111622] border border-[#1e2638] rounded-2xl p-5 space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-xs font-bold text-white uppercase tracking-wider">Performa Tag Provider</h2>
+                        <p class="text-[11px] text-[#828e9e] mt-0.5">Statistik link per operator jaringan</p>
+                    </div>
+                    <span class="text-[11px] text-slate-400 font-mono">3 Provider ISP</span>
+                </div>
+
+                <div id="providerBreakdownContainer" class="space-y-2.5 pt-1">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ======================================================== -->
+        <!-- 5. MONITOR LIST (FRIENDLY NAME PROMINENT)                -->
+        <!-- ======================================================== -->
+        <section class="bg-[#111622] border border-[#1e2638] rounded-2xl overflow-hidden">
+            
+            <!-- Header List -->
+            <div class="p-4 border-b border-[#1b2234] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0d111a]">
+                <div class="flex items-center gap-2.5">
+                    <h2 class="text-sm font-bold text-white tracking-tight">Daftar Monitor Terpantau</h2>
+                    <span id="filteredBadgeCount" class="text-xs font-mono px-2 py-0.5 rounded bg-[#161c2b] text-slate-400 border border-[#1e2638]">325 Item</span>
+                </div>
+
+                <div class="flex items-center gap-2.5">
+                    <!-- Cards vs Table switch -->
+                    <div class="flex items-center p-0.5 bg-[#090c12] border border-[#1e2638] rounded-lg text-xs">
+                        <button onclick="setViewMode('cards')" id="btnViewCards" class="px-2.5 py-1 rounded font-medium bg-[#161c2b] text-white transition-colors">
+                            Kartu
+                        </button>
+                        <button onclick="setViewMode('table')" id="btnViewTable" class="px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition-colors">
+                            Tabel NOC
+                        </button>
+                    </div>
+
+                    <!-- Quick copy report -->
+                    <button onclick="copyStatusReport()" class="px-3 py-1.5 rounded-lg bg-[#161c2b] border border-[#1e2638] hover:border-slate-600 text-xs text-slate-300 hover:text-white transition-colors flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        Salin Rekap
+                    </button>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div id="monitorsListContainer" class="p-4">
+                <!-- Populated via JS -->
+            </div>
+
+            <!-- List Footer -->
+            <div class="px-4 py-3 border-t border-[#1b2234] bg-[#0d111a] flex flex-col sm:flex-row items-center justify-between text-xs text-[#828e9e] gap-2">
+                <div>Menampilkan <span id="showingItemsCount" class="text-white font-mono font-medium">325</span> monitor sesuai filter</div>
+                <div class="flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-[#5cdd8b]"></span>
+                    <span>Status terintegrasi Uptime Kuma SQLite Database (data/kuma.db)</span>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-16 opacity-0 transition-all duration-200 pointer-events-none">
+        <div class="bg-[#161c2b] border border-[#2a354c] px-4 py-3 rounded-xl shadow-xl flex items-center gap-3">
+            <span class="w-2 h-2 rounded-full bg-[#5cdd8b]"></span>
+            <div>
+                <p class="text-xs font-semibold text-white" id="toastTitle">Info</p>
+                <p class="text-[11px] text-[#828e9e]" id="toastMsg">Pesan informasi</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC WITH REAL EXTRACTED DATABASE MONITORS -->
+    <script>
+        // Data diambil langsung dari tabel monitor data/kuma.db (325 items)
+        const rawDatabaseMonitors = [
+  {
+    "id": 825,
+    "name": "01BAS1 - Payakumbuh - 1 50.000",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "192.1.0.25",
+    "status": "DOWN",
+    "ping": 0,
+    "uptime24h": "95.3",
+    "downtime": "38 Menit",
+    "downSince": "13:52 WIB",
+    "reason": "Request timed out (100% packet loss)",
+    "lastChecked": "11 dtk lalu"
+  },
+  {
+    "id": 826,
+    "name": "010013 KAMPUS PNP POLITANI",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.1.109.2",
+    "status": "DOWN",
+    "ping": 0,
+    "uptime24h": "94.4",
+    "downtime": "1 Jam 14 Menit",
+    "downSince": "13:16 WIB",
+    "reason": "Request timed out (100% packet loss)",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 827,
+    "name": "CABANG PAYAKUMBUH",
+    "type": "KANTOR",
+    "group": "PAYAKUMBUH",
+    "tag": "Non-Tag",
+    "allTags": [
+      "KANTOR CABANG"
+    ],
+    "ip": "192.1.0.1",
+    "status": "UP",
+    "ping": 25,
+    "uptime24h": "99.86",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 829,
+    "name": "010003 Kantor Bupati Limapuluh Kota / Sarilamak",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.1.3.25",
+    "status": "DOWN",
+    "ping": 0,
+    "uptime24h": "94.7",
+    "downtime": "22 Menit",
+    "downSince": "14:08 WIB",
+    "reason": "Request timed out (100% packet loss)",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 830,
+    "name": "010004 JS Mart",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.1.101.2",
+    "status": "UP",
+    "ping": 18,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 831,
+    "name": "010005 Toko Arinda",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.1.102.2",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.98",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "27 dtk lalu"
+  },
+  {
+    "id": 832,
+    "name": "010006 supermarket Niagara Galery",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.1.103.2",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 833,
+    "name": "010007 KK HALABAN",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.1.5.50",
+    "status": "UP",
+    "ping": 13,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 834,
+    "name": "010008 LAMPASI",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.1.104.2",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.88",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 835,
+    "name": "010009 TAN MALAKA KPRI",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.1.105.2",
+    "status": "UP",
+    "ping": 20,
+    "uptime24h": "99.86",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 836,
+    "name": "010019 Balaikota Payakumbuh",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.1.111.2",
+    "status": "UP",
+    "ping": 9,
+    "uptime24h": "99.85",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "21 dtk lalu"
+  },
+  {
+    "id": 837,
+    "name": "010201 RSUD Adnaan WD Payakumbuh",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.1.2.10",
+    "status": "UP",
+    "ping": 12,
+    "uptime24h": "99.84",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 838,
+    "name": "019001 CRM PAYAKUMBUH",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.1.0.123",
+    "status": "UP",
+    "ping": 9,
+    "uptime24h": "99.96",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "5 dtk lalu"
+  },
+  {
+    "id": 839,
+    "name": "010101 Pasar Ibuh",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.1.1.50",
+    "status": "UP",
+    "ping": 25,
+    "uptime24h": "99.88",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 840,
+    "name": "010011 PDAM PYK",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.1.107.2",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.82",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "16 dtk lalu"
+  },
+  {
+    "id": 841,
+    "name": "010012 SITUJUH",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.1.108.2",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.78",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 842,
+    "name": "010010  SPBU PADANG KARAMBIA",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.1.106.2",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 843,
+    "name": "10404 RSUD Dangung dangung",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "192.1.4.25",
+    "status": "UP",
+    "ping": 13,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "11 dtk lalu"
+  },
+  {
+    "id": 844,
+    "name": "010402 RSUD Suliki",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.1.100.2",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.79",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 845,
+    "name": "010405 Samsat Limbanang",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.1.204.3",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.86",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 846,
+    "name": "010018 JORONG MUNGKA",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.1.110.2",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.89",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "26 dtk lalu"
+  },
+  {
+    "id": 847,
+    "name": "180001 KC Pangkalan",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.18.0.50",
+    "status": "UP",
+    "ping": 13,
+    "uptime24h": "99.96",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 848,
+    "name": "180002 Muaro Peti",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.18.100.2",
+    "status": "UP",
+    "ping": 9,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 849,
+    "name": "180003 RM Ombak",
+    "type": "ATM",
+    "group": "PAYAKUMBUH",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.18.101.2",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.98",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 853,
+    "name": "CABANG BUKITTINGI",
+    "type": "KANTOR",
+    "group": "BUKITTINGGI",
+    "tag": "Non-Tag",
+    "allTags": [
+      "KANTOR CABANG"
+    ],
+    "ip": "192.2.0.1",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.95",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 855,
+    "name": "02BAS1 KC Bukittinggi – 1 50.000",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.2.0.100",
+    "status": "DOWN",
+    "ping": 0,
+    "uptime24h": "91.7",
+    "downtime": "45 Menit",
+    "downSince": "13:45 WIB",
+    "reason": "Request timed out (100% packet loss)",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 856,
+    "name": "020006 KC Bukittinggi – 2 100.000",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.2.0.101",
+    "status": "UP",
+    "ping": 7,
+    "uptime24h": "99.95",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "16 dtk lalu"
+  },
+  {
+    "id": 857,
+    "name": "020007 Ktr Balalkota Gulai Bancah Bukittinggi",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.2.101.2",
+    "status": "UP",
+    "ping": 18,
+    "uptime24h": "99.94",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 858,
+    "name": "020008 DPKAD bukittingi",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.2.5.15",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 859,
+    "name": "020009 RS Ibnu Sina Bukittinggi",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.2.100.2",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.79",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 860,
+    "name": "020010 STIKES Prima Nusantara",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.2.100.2",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.95",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "19 dtk lalu"
+  },
+  {
+    "id": 861,
+    "name": "020012 Toko Kedaung",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.2.103.2",
+    "status": "UP",
+    "ping": 25,
+    "uptime24h": "99.72",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 862,
+    "name": "020013 Hokki Mart",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.2.102.2",
+    "status": "UP",
+    "ping": 15,
+    "uptime24h": "99.78",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 863,
+    "name": "020016 IAIN BUKITTINGGI",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.2.108.2",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.93",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 864,
+    "name": "020017 ASLAN MART",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.2.109.2",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "3 dtk lalu"
+  },
+  {
+    "id": 865,
+    "name": "020019 MUTIARA STORE",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.2.110.2",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 866,
+    "name": "020303 RSAM Bukittinggi",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.2.3.10",
+    "status": "UP",
+    "ping": 7,
+    "uptime24h": "99.72",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 867,
+    "name": "020404 Komp RSUP P3SN",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.2.4.25",
+    "status": "UP",
+    "ping": 18,
+    "uptime24h": "100.00",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "5 dtk lalu"
+  },
+  {
+    "id": 868,
+    "name": "029001 CRM Bukittinggi",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.2.0.102",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 869,
+    "name": "020102 KCP Pasar Bawah",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.2.1.50",
+    "status": "UP",
+    "ping": 20,
+    "uptime24h": "99.76",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 870,
+    "name": "020014 IPDN",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.2.104.2",
+    "status": "UP",
+    "ping": 12,
+    "uptime24h": "99.85",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "22 dtk lalu"
+  },
+  {
+    "id": 871,
+    "name": "020015 SPBU BASO",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.2.10.100",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.72",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "3 dtk lalu"
+  },
+  {
+    "id": 872,
+    "name": "020120 PAKAN KAMIS",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.2.111.2",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.74",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 873,
+    "name": "020205 KCP Aur Kuning",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "192.2.2.25",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.88",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 875,
+    "name": "020601 Padang Luar",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.2.6.25",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.71",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "21 dtk lalu"
+  },
+  {
+    "id": 876,
+    "name": "020602 Simpang Jambu Air",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.2.106.2",
+    "status": "UP",
+    "ping": 26,
+    "uptime24h": "99.77",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 877,
+    "name": "720101 SYARIAH BUKITTINGGI",
+    "type": "ATM",
+    "group": "BUKITTINGGI",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.72.1.100",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.91",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 880,
+    "name": "Cabang Batusangkar",
+    "type": "KANTOR",
+    "group": "Batusangkar",
+    "tag": "Non-Tag",
+    "allTags": [
+      "KANTOR CABANG"
+    ],
+    "ip": "192.3.0.1",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.98",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 881,
+    "name": "03BAS1 KC Batusangkar 50.000",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.3.0.50",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.88",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "27 dtk lalu"
+  },
+  {
+    "id": 882,
+    "name": "030002 RSUD Batusangkar",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.3.100.2",
+    "status": "UP",
+    "ping": 7,
+    "uptime24h": "99.85",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 883,
+    "name": "030005 Pasar Pariangan/Simabur",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.3.102.2",
+    "status": "UP",
+    "ping": 7,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 884,
+    "name": "030006 MY MART",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.3.103.2",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.78",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 885,
+    "name": "030008 Ktr Bupati Batusangkar",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.3.104.2",
+    "status": "UP",
+    "ping": 18,
+    "uptime24h": "99.96",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "22 dtk lalu"
+  },
+  {
+    "id": 886,
+    "name": "030009 Simpang GOBA",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.3.105.2",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.95",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "21 dtk lalu"
+  },
+  {
+    "id": 887,
+    "name": "030010 Sungai Tarab",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.3.106.2",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.88",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 888,
+    "name": "030207 TABEK PATAH",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.3.2.50",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.71",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 889,
+    "name": "030213 SPBU BARULA",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.3.109.2",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "11 dtk lalu"
+  },
+  {
+    "id": 890,
+    "name": "030011 Sungayang",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.3.107.2",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.71",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 891,
+    "name": "030012 IAIN BATUSANGKAR",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.3.108.2",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.95",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "26 dtk lalu"
+  },
+  {
+    "id": 892,
+    "name": "039001 CRM BATUSANGKAR",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.3.0.51",
+    "status": "UP",
+    "ping": 13,
+    "uptime24h": "99.77",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 893,
+    "name": "720301 Cab Syariah Batusangkar",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "172.72.3.100",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.88",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 894,
+    "name": "720302 KEMENAG BATUSANGKAR",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.72.100.2",
+    "status": "UP",
+    "ping": 25,
+    "uptime24h": "99.75",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 895,
+    "name": "720303 IAIN KAMPUS 1",
+    "type": "ATM",
+    "group": "Batusangkar",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.3.101.2",
+    "status": "UP",
+    "ping": 9,
+    "uptime24h": "99.98",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "26 dtk lalu"
+  },
+  {
+    "id": 897,
+    "name": "04BA51 KC Painan 100.000",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.4.0.50",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 898,
+    "name": "040002 Ktr Bupati Pesisir Selatan",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.4.101.2",
+    "status": "UP",
+    "ping": 12,
+    "uptime24h": "99.85",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 899,
+    "name": "040003 RSUD Painan PAINAN",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.4.100.2",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 900,
+    "name": "040005 KK BAYANG / PASAR BARU",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "192.4.3.50",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.81",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 901,
+    "name": "040008 WALI NAGARI BATANG KAPEH",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.4.105.2",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "3 dtk lalu"
+  },
+  {
+    "id": 902,
+    "name": "040010 Carocok Painan",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.4.107.2",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.72",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 903,
+    "name": "049001 CRM PAINAN",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.4.0.100",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 905,
+    "name": "040102 KOTO BARU Lengayang",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.4.108.2",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.96",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 906,
+    "name": "040101 KCP Kambang",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.4.1.50",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.75",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 907,
+    "name": "040012 Pasar Lakitan",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.4.106.2",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 908,
+    "name": "040013 Pasar Surantih",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.4.4.2",
+    "status": "UP",
+    "ping": 18,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 909,
+    "name": "040201 KCP Tarusan",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.4.2.50",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.77",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 910,
+    "name": "040006 BARUNG BALANTAI",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.4.102.2",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 912,
+    "name": "05BAS1 KC Pariaman 100.000",
+    "type": "ATM",
+    "group": "PARIAMAN",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.5.0.30",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "27 dtk lalu"
+  },
+  {
+    "id": 913,
+    "name": "050003 RSUD Pariaman",
+    "type": "ATM",
+    "group": "PARIAMAN",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.5.100.2",
+    "status": "UP",
+    "ping": 7,
+    "uptime24h": "99.84",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 914,
+    "name": "050004 Ktr Balaikota Pariaman",
+    "type": "ATM",
+    "group": "PARIAMAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.5.101.2",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.81",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "3 dtk lalu"
+  },
+  {
+    "id": 915,
+    "name": "050006 Sungai Geringging",
+    "type": "ATM",
+    "group": "PARIAMAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.5.4.50",
+    "status": "UP",
+    "ping": 9,
+    "uptime24h": "99.91",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "27 dtk lalu"
+  },
+  {
+    "id": 916,
+    "name": "050007 PASAR PARIAMAN",
+    "type": "ATM",
+    "group": "PARIAMAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.5.100.2",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.94",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 917,
+    "name": "050010 DPRD PARIAMAN",
+    "type": "ATM",
+    "group": "PARIAMAN",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.5.104.2",
+    "status": "UP",
+    "ping": 13,
+    "uptime24h": "99.93",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 918,
+    "name": "050102 Sungai sariak",
+    "type": "ATM",
+    "group": "PARIAMAN",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.5.1.10",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.82",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 919,
+    "name": "050011 Kilinik bidan gasan",
+    "type": "ATM",
+    "group": "PARIAMAN",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.5.106.2",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.96",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "21 dtk lalu"
+  },
+  {
+    "id": 920,
+    "name": "050012 BALAI DESA KURAITAJI",
+    "type": "ATM",
+    "group": "PARIAMAN",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.5.105.2",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.87",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 921,
+    "name": "059001 CRM PARIAMAN",
+    "type": "ATM",
+    "group": "PARIAMAN",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.5.0.100",
+    "status": "UP",
+    "ping": 25,
+    "uptime24h": "99.72",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 922,
+    "name": "050013 SAFARI HOTEL",
+    "type": "ATM",
+    "group": "PARIAMAN",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.5.107.2",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.81",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 923,
+    "name": "050305 KCP SUNGAI LIMAU",
+    "type": "ATM",
+    "group": "PARIAMAN",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.5.3.25",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.72",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 925,
+    "name": "068AS1 Syariah Solok",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "172.71.2.50",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.80",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 926,
+    "name": "710202 Gunung Talang",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.71.102.2",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.74",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 927,
+    "name": "710203 SYARIAH SOLOK",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "172.71.2.100",
+    "status": "UP",
+    "ping": 12,
+    "uptime24h": "99.89",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 928,
+    "name": "710204 SMA 2 SUMBAR",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.71.201.2",
+    "status": "UP",
+    "ping": 12,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 929,
+    "name": "060003 Ktr Balai Kota Solok",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.6.101.2",
+    "status": "UP",
+    "ping": 26,
+    "uptime24h": "99.82",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 930,
+    "name": "060004 RSUD Solok",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.6.103.2",
+    "status": "UP",
+    "ping": 9,
+    "uptime24h": "99.95",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 931,
+    "name": "060005 Taman Hijau Solok",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.6.0.99",
+    "status": "UP",
+    "ping": 26,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 932,
+    "name": "060006 Cab. Solok Kantor Baru 1 100.000",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.6.0.103",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.75",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 933,
+    "name": "060007 Cab. Solok Kantor Baru 2 100.000",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.6.0.101",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 934,
+    "name": "060010 SPBU KOTO BARU SOLOK",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.6.104.2",
+    "status": "UP",
+    "ping": 25,
+    "uptime24h": "99.80",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 935,
+    "name": "060011 MUARA PANEH",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.6.105.2",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.79",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "9 dtk lalu"
+  },
+  {
+    "id": 936,
+    "name": "060012 SUMANI SOLOK",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.6.106.2",
+    "status": "UP",
+    "ping": 9,
+    "uptime24h": "99.79",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 937,
+    "name": "060014 TOKO PUJA SOLOK",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.6.108.2",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.94",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "22 dtk lalu"
+  },
+  {
+    "id": 938,
+    "name": "060015 PEMKO LAING",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.6.108.2",
+    "status": "UP",
+    "ping": 18,
+    "uptime24h": "99.84",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 939,
+    "name": "060016 Gedung Promosi",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.6.110.2",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 940,
+    "name": "060017 RSUD SERAMBI MADINAH",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.6.109.2",
+    "status": "UP",
+    "ping": 26,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 941,
+    "name": "060018 Lubuak Sikarah SOLOK",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.6.109.2",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.89",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "26 dtk lalu"
+  },
+  {
+    "id": 942,
+    "name": "069001 CRM SOLOK",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.6.0.102",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.81",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "27 dtk lalu"
+  },
+  {
+    "id": 943,
+    "name": "060102 Ktr Bupati Arosuka Solok",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.6.111.2",
+    "status": "UP",
+    "ping": 18,
+    "uptime24h": "99.78",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 944,
+    "name": "060008 SPBU Lubuk Selasih",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "172.6.100.2",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.89",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 945,
+    "name": "060113 RSUD AROSUKA SOLOK",
+    "type": "ATM",
+    "group": "SOLOK",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.6.107.2",
+    "status": "UP",
+    "ping": 12,
+    "uptime24h": "99.94",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 947,
+    "name": "07BAS1 Kantor Bupati SIJUNJUNG",
+    "type": "ATM",
+    "group": "Sijunjung",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.7.101.2",
+    "status": "UP",
+    "ping": 12,
+    "uptime24h": "99.70",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 948,
+    "name": "070003 Kantor DPRD",
+    "type": "ATM",
+    "group": "Sijunjung",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.7.107.2",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.81",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "21 dtk lalu"
+  },
+  {
+    "id": 949,
+    "name": "070006 Padang SIBUSUK",
+    "type": "ATM",
+    "group": "Sijunjung",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.7.100.2",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.75",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 950,
+    "name": "070010 KANTOR BERSAMA",
+    "type": "ATM",
+    "group": "Sijunjung",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.7.106.2",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.91",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 951,
+    "name": "070005 RSUD Sijunjung",
+    "type": "ATM",
+    "group": "Sijunjung",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.7.102.2",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.82",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 952,
+    "name": "070109 TANJUNG GADANG",
+    "type": "ATM",
+    "group": "Sijunjung",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.7.104.2",
+    "status": "UP",
+    "ping": 18,
+    "uptime24h": "99.71",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 953,
+    "name": "079001 CRM SIJUNJUNG",
+    "type": "ATM",
+    "group": "Sijunjung",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "172.7.0.100",
+    "status": "UP",
+    "ping": 20,
+    "uptime24h": "99.89",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 954,
+    "name": "070307 TANJUNG AMPALU",
+    "type": "ATM",
+    "group": "Sijunjung",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.7.3.50",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.74",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 955,
+    "name": "070308 KUMANIS",
+    "type": "ATM",
+    "group": "Sijunjung",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.7.105.2",
+    "status": "UP",
+    "ping": 13,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 956,
+    "name": "070104 KCP Ps.Raya Sijunjung",
+    "type": "ATM",
+    "group": "Sijunjung",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "172.7.1.25",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.98",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 957,
+    "name": "140202 KCP Sungai Tambang",
+    "type": "ATM",
+    "group": "Sijunjung",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.14.2.50",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "27 dtk lalu"
+  },
+  {
+    "id": 959,
+    "name": "080002 Kantor Bupati Lubuk Sikaping",
+    "type": "ATM",
+    "group": "Lubuk Sikaping",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.8.100.2",
+    "status": "UP",
+    "ping": 15,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "11 dtk lalu"
+  },
+  {
+    "id": 960,
+    "name": "080003 Kas Kumpulan",
+    "type": "ATM",
+    "group": "Lubuk Sikaping",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "192.8.2.25",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.77",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "22 dtk lalu"
+  },
+  {
+    "id": 961,
+    "name": "080005 RSUD LUBUK SIKAPING",
+    "type": "ATM",
+    "group": "Lubuk Sikaping",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.8.101.2",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 962,
+    "name": "080006 CABANG LUBUK SIKAPING",
+    "type": "ATM",
+    "group": "Lubuk Sikaping",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "172.8.0.50",
+    "status": "UP",
+    "ping": 26,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 963,
+    "name": "08BAS1 Kantor CB Lubuk Sikaping",
+    "type": "ATM",
+    "group": "Lubuk Sikaping",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "172.8.0.50",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.74",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 964,
+    "name": "080101 Pasar Ladang Panjang Tigo Nagari",
+    "type": "ATM",
+    "group": "Lubuk Sikaping",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.8.1.25",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "19 dtk lalu"
+  },
+  {
+    "id": 966,
+    "name": "090003 KC Padang Panjang 100.000",
+    "type": "ATM",
+    "group": "PADANG PANJANG",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.9.0.100",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.84",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "22 dtk lalu"
+  },
+  {
+    "id": 967,
+    "name": "090002 Ktr Balaikota Padang Panjang",
+    "type": "ATM",
+    "group": "PADANG PANJANG",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.9.101.2",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "5 dtk lalu"
+  },
+  {
+    "id": 968,
+    "name": "090004 RSUD Padang Panjang",
+    "type": "ATM",
+    "group": "PADANG PANJANG",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.9.2.25",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.74",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "4 dtk lalu"
+  },
+  {
+    "id": 969,
+    "name": "090005 ΕKOR LUBUK GUNUNG",
+    "type": "ATM",
+    "group": "PADANG PANJANG",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.9.102.2",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.94",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 970,
+    "name": "090006 TOKO PARIS",
+    "type": "ATM",
+    "group": "PADANG PANJANG",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.9.103.2",
+    "status": "UP",
+    "ping": 20,
+    "uptime24h": "99.94",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "16 dtk lalu"
+  },
+  {
+    "id": 971,
+    "name": "090007 KUBU KARAMBIA",
+    "type": "ATM",
+    "group": "PADANG PANJANG",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.9.104.2",
+    "status": "UP",
+    "ping": 18,
+    "uptime24h": "99.98",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 972,
+    "name": "090008 Pasar Padang Panjang",
+    "type": "ATM",
+    "group": "PADANG PANJANG",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.9.105.2",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.93",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 973,
+    "name": "090009 GDR Mart",
+    "type": "ATM",
+    "group": "PADANG PANJANG",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.9.106.2",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.76",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 974,
+    "name": "090010 ISI Padang Panjang",
+    "type": "ATM",
+    "group": "PADANG PANJANG",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.9.107.2",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.98",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "4 dtk lalu"
+  },
+  {
+    "id": 975,
+    "name": "099001 CRM PADANG PANJANG",
+    "type": "ATM",
+    "group": "PADANG PANJANG",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.9.0.50",
+    "status": "UP",
+    "ping": 13,
+    "uptime24h": "99.95",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "9 dtk lalu"
+  },
+  {
+    "id": 977,
+    "name": "110002 SPBU Muaro Kalaban",
+    "type": "ATM",
+    "group": "SAWAHLUNTO",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.11.100.2",
+    "status": "UP",
+    "ping": 9,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 978,
+    "name": "110003 RSUD SAWAHLUNTO",
+    "type": "ATM",
+    "group": "SAWAHLUNTO",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.11.101.2",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.91",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 979,
+    "name": "110004 SANTUR//BARANGIN",
+    "type": "ATM",
+    "group": "SAWAHLUNTO",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.11.102.2",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.98",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 980,
+    "name": "110005 BALAIKOTA SAWAHLUNTO",
+    "type": "ATM",
+    "group": "SAWAHLUNTO",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.11.1.25",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.79",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 981,
+    "name": "110007 SILUNGKANG SAWAHLUNTO",
+    "type": "ATM",
+    "group": "SAWAHLUNTO",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.11.104.2",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.71",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 982,
+    "name": "119001 CRM SAWAHLUNTO",
+    "type": "ATM",
+    "group": "SAWAHLUNTO",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "172.11.0.50",
+    "status": "UP",
+    "ping": 20,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 983,
+    "name": "110201 Capem Talawi",
+    "type": "ATM",
+    "group": "SAWAHLUNTO",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "172.11.2.50",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.71",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 985,
+    "name": "12BAS1 KC Simpang Empat 100.000",
+    "type": "ATM",
+    "group": "Simpang empat",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.12.0.50",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 986,
+    "name": "120103 KK Simpang Tiga",
+    "type": "ATM",
+    "group": "Simpang empat",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.12.1.50",
+    "status": "UP",
+    "ping": 9,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 987,
+    "name": "120005 PT Gersindo Tjg Pangka",
+    "type": "ATM",
+    "group": "Simpang empat",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.12.100.2",
+    "status": "UP",
+    "ping": 9,
+    "uptime24h": "99.76",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 988,
+    "name": "120006 KTR KAS TEMPURUNG",
+    "type": "ATM",
+    "group": "Simpang empat",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.12.4.50",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.78",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "19 dtk lalu"
+  },
+  {
+    "id": 989,
+    "name": "120007 RS IBNU SINA SIMP. EMPAT",
+    "type": "ATM",
+    "group": "Simpang empat",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.12.102.2",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.80",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 990,
+    "name": "120008 RSUD SIMP. EMPAT",
+    "type": "ATM",
+    "group": "Simpang empat",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.12.101.2",
+    "status": "UP",
+    "ping": 26,
+    "uptime24h": "99.89",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 991,
+    "name": "120009 TALAMAU (TALU)",
+    "type": "ATM",
+    "group": "Simpang empat",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.12.103.2",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.78",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 992,
+    "name": "120010 PUSKESMAS SASAK",
+    "type": "ATM",
+    "group": "Simpang empat",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.12.104.2",
+    "status": "UP",
+    "ping": 25,
+    "uptime24h": "99.76",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "19 dtk lalu"
+  },
+  {
+    "id": 993,
+    "name": "120011 DINAS PENDIDIKAN",
+    "type": "ATM",
+    "group": "Simpang empat",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.12.105.2",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.89",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 994,
+    "name": "120012 KTR BUPATI SIMPANG EMPAT",
+    "type": "ATM",
+    "group": "Simpang empat",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.12.3.50",
+    "status": "UP",
+    "ping": 15,
+    "uptime24h": "99.74",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "16 dtk lalu"
+  },
+  {
+    "id": 995,
+    "name": "129001 CRM PASAMAN BARAT",
+    "type": "ATM",
+    "group": "Simpang empat",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.12.0.51",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 996,
+    "name": "120202 KCP Kinali",
+    "type": "ATM",
+    "group": "Simpang empat",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.12.2.50",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.76",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 997,
+    "name": "120203 Padang Canduh",
+    "type": "ATM",
+    "group": "Simpang empat",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.12.106.2",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.80",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "19 dtk lalu"
+  },
+  {
+    "id": 999,
+    "name": "130002 KC Mulara Labuh 100.000",
+    "type": "ATM",
+    "group": "Muaro Labuh",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.13.0.50",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 1000,
+    "name": "130002 KC Mulara Labuh 100.000",
+    "type": "ATM",
+    "group": "Muaro Labuh",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.13.0.50",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.79",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 1001,
+    "name": "130003 KC Mulara Labuh 50.000",
+    "type": "ATM",
+    "group": "Muaro Labuh",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.13.0.101",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 1002,
+    "name": "130004 RSUD Solok Selatan",
+    "type": "ATM",
+    "group": "Muaro Labuh",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.13.101.2",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.78",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 1003,
+    "name": "130005 PAKAN RABAA",
+    "type": "ATM",
+    "group": "Muaro Labuh",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.13.102.2",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "5 dtk lalu"
+  },
+  {
+    "id": 1004,
+    "name": "130006 PAKAN SALASA",
+    "type": "ATM",
+    "group": "Muaro Labuh",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.13.103.2",
+    "status": "UP",
+    "ping": 26,
+    "uptime24h": "99.78",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 1005,
+    "name": "130203 Kantorr Bupati Solok Selatan",
+    "type": "ATM",
+    "group": "Lubuk Gadang",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.13.2.50",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.95",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 1007,
+    "name": "130102 KCP Lubuk Gadang 100.000",
+    "type": "ATM",
+    "group": "Lubuk Gadang",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.13.1.100",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.91",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 1008,
+    "name": "130104 RS Pratama Solses",
+    "type": "ATM",
+    "group": "Lubuk Gadang",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.13.105.2",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.85",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 1009,
+    "name": "139101 CRM lubuk gadang",
+    "type": "ATM",
+    "group": "Lubuk Gadang",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.13.1.101",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.85",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "21 dtk lalu"
+  },
+  {
+    "id": 1010,
+    "name": "130305 LBK MALAKO",
+    "type": "ATM",
+    "group": "Lubuk Gadang",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.13.3.50",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.79",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "22 dtk lalu"
+  },
+  {
+    "id": 1011,
+    "name": "130106 SUNGAI KUNYIK",
+    "type": "ATM",
+    "group": "Lubuk Gadang",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.131.101.2",
+    "status": "UP",
+    "ping": 25,
+    "uptime24h": "99.94",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 1012,
+    "name": "130307 SPBU Karen",
+    "type": "ATM",
+    "group": "Lubuk Gadang",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.131.102.2",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "19 dtk lalu"
+  },
+  {
+    "id": 1013,
+    "name": "130308 SPBU Abai",
+    "type": "ATM",
+    "group": "Lubuk Gadang",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.13.105.2",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.88",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "21 dtk lalu"
+  },
+  {
+    "id": 1015,
+    "name": "140003 KC Kotobaru",
+    "type": "ATM",
+    "group": "DARMASRAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.14.0.100",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.96",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 1016,
+    "name": "140006 STIKES Dhamasraya / UNDARI",
+    "type": "ATM",
+    "group": "DARMASRAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.14.101.2",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.73",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "22 dtk lalu"
+  },
+  {
+    "id": 1017,
+    "name": "140007 Rumah Makan Umega",
+    "type": "ATM",
+    "group": "DARMASRAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.14.102.2",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.87",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 1018,
+    "name": "140014 Simpang Tiga Koto Baru",
+    "type": "ATM",
+    "group": "DARMASRAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.14.104.2",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.87",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 1019,
+    "name": "140015 PASAR AMPALU",
+    "type": "ATM",
+    "group": "DARMASRAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.14.105.2",
+    "status": "UP",
+    "ping": 7,
+    "uptime24h": "99.73",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 1020,
+    "name": "140104 Rumbai PLAZA",
+    "type": "ATM",
+    "group": "DARMASRAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.14.106.2",
+    "status": "UP",
+    "ping": 13,
+    "uptime24h": "99.93",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 1021,
+    "name": "140110 TOKO KSI (PT.KSI)",
+    "type": "ATM",
+    "group": "DARMASRAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.14.103.2",
+    "status": "UP",
+    "ping": 18,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "5 dtk lalu"
+  },
+  {
+    "id": 1022,
+    "name": "140112 TKA TALANG",
+    "type": "ATM",
+    "group": "DARMASRAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.14.201.5",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "21 dtk lalu"
+  },
+  {
+    "id": 1023,
+    "name": "140103 KCP SUNGAI RUMBAI",
+    "type": "ATM",
+    "group": "DARMASRAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.14.1.50",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.79",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 1024,
+    "name": "140016 ICUD Sinar Makmur",
+    "type": "ATM",
+    "group": "DARMASRAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.14.108.2",
+    "status": "UP",
+    "ping": 20,
+    "uptime24h": "99.96",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "4 dtk lalu"
+  },
+  {
+    "id": 1025,
+    "name": "14PLP1 Pulau Punjung",
+    "type": "ATM",
+    "group": "DARMASRAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.14.3.25",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.93",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 1026,
+    "name": "140508 Sitiung",
+    "type": "ATM",
+    "group": "DARMASRAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.14.5.50",
+    "status": "UP",
+    "ping": 25,
+    "uptime24h": "99.77",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "3 dtk lalu"
+  },
+  {
+    "id": 1028,
+    "name": "150004 Bakrie Plantation",
+    "type": "ATM",
+    "group": "Ujung Gading",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.15.100.2",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.79",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "9 dtk lalu"
+  },
+  {
+    "id": 1029,
+    "name": "150005 Simpang Tiga Alin",
+    "type": "ATM",
+    "group": "Ujung Gading",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.15.101.2",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.80",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 1030,
+    "name": "150006 Spbu Air Balam",
+    "type": "ATM",
+    "group": "Ujung Gading",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.15.102.2",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.70",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "4 dtk lalu"
+  },
+  {
+    "id": 1031,
+    "name": "150007 Kk Sungai Aur",
+    "type": "ATM",
+    "group": "Ujung Gading",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.15.3.5",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.78",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 1032,
+    "name": "15BAS1 Cab Ujg Gading",
+    "type": "ATM",
+    "group": "Ujung Gading",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.15.0.50",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.73",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 1033,
+    "name": "150101 Capem Mranahbatahan",
+    "type": "ATM",
+    "group": "Ujung Gading",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.15.1.2",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 1034,
+    "name": "150201 Capem Air Bangis",
+    "type": "ATM",
+    "group": "Ujung Gading",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.15.2.50",
+    "status": "UP",
+    "ping": 13,
+    "uptime24h": "99.74",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "5 dtk lalu"
+  },
+  {
+    "id": 1036,
+    "name": "160002 Pasar Lama Lubuk Basung",
+    "type": "ATM",
+    "group": "Lubuk Basung",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.16.2.50",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.75",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 1037,
+    "name": "160003 KC Lubuk Basung 100.000",
+    "type": "ATM",
+    "group": "Lubuk Basung",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.16.0.50",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.86",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "19 dtk lalu"
+  },
+  {
+    "id": 1038,
+    "name": "160004 MANINJAU",
+    "type": "ATM",
+    "group": "Lubuk Basung",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.16.100.2",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.95",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 1039,
+    "name": "160005 N MART",
+    "type": "ATM",
+    "group": "Lubuk Basung",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.16.102.2",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.87",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 1040,
+    "name": "160007 TIKU TPLN",
+    "type": "ATM",
+    "group": "Lubuk Basung",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.16.3.5",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.77",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "16 dtk lalu"
+  },
+  {
+    "id": 1041,
+    "name": "160008 SIMP GUDANG MANGGOPOH",
+    "type": "ATM",
+    "group": "Lubuk Basung",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.16.103.2",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.85",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 1042,
+    "name": "160009 KTR BUPATI",
+    "type": "ATM",
+    "group": "Lubuk Basung",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.16.105.2",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 1043,
+    "name": "160010 CENDIKIA",
+    "type": "ATM",
+    "group": "Lubuk Basung",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.16.106.2",
+    "status": "UP",
+    "ping": 20,
+    "uptime24h": "99.80",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 1044,
+    "name": "169001 CRM Lubuk Basung",
+    "type": "ATM",
+    "group": "Lubuk Basung",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.16.0.51",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.85",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 1045,
+    "name": "160101 KCP Bawan",
+    "type": "ATM",
+    "group": "Lubuk Basung",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.16.1.100",
+    "status": "UP",
+    "ping": 26,
+    "uptime24h": "99.79",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 1046,
+    "name": "160102 PT.AMP (AKTIF 22/2/2018)",
+    "type": "ATM",
+    "group": "Lubuk Basung",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.16.104.2",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "26 dtk lalu"
+  },
+  {
+    "id": 1048,
+    "name": "17BAS1 KC Lubük Alung 100.000",
+    "type": "ATM",
+    "group": "Lubuk Alung",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.17.0.50",
+    "status": "UP",
+    "ping": 25,
+    "uptime24h": "99.79",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 1049,
+    "name": "170003 RS PARU",
+    "type": "ATM",
+    "group": "Lubuk Alung",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.17.101.2",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "9 dtk lalu"
+  },
+  {
+    "id": 1050,
+    "name": "170004 Campem Batang Anai",
+    "type": "ATM",
+    "group": "Lubuk Alung",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.17.3.100",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.75",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 1051,
+    "name": "170005 RSUD PARIT MALINTANG",
+    "type": "ATM",
+    "group": "Lubuk Alung",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.17.102.2",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 1052,
+    "name": "170006 SPBU SINTOGA",
+    "type": "ATM",
+    "group": "Lubuk Alung",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.17.104.2",
+    "status": "UP",
+    "ping": 20,
+    "uptime24h": "99.91",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "11 dtk lalu"
+  },
+  {
+    "id": 1053,
+    "name": "170202 Kantor Bupati Parit Malintang",
+    "type": "ATM",
+    "group": "Lubuk Alung",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.17.100.2",
+    "status": "UP",
+    "ping": 26,
+    "uptime24h": "99.80",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 1054,
+    "name": "179001 CRM Lubuk Alung",
+    "type": "ATM",
+    "group": "Lubuk Alung",
+    "tag": "Telkom",
+    "allTags": [
+      "ATM",
+      "Telkom"
+    ],
+    "ip": "192.17.0.51",
+    "status": "UP",
+    "ping": 7,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 1055,
+    "name": "170101 IKCP Sicincin",
+    "type": "ATM",
+    "group": "Lubuk Alung",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "172.17.1.50",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.71",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 1057,
+    "name": "19BAS1 Kantor CB Tapan",
+    "type": "ATM",
+    "group": "TAPAN",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.19.0.50",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.81",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 1058,
+    "name": "190102 Kantor CAPEM Silaut",
+    "type": "ATM",
+    "group": "TAPAN",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.19.1.50",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.81",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "26 dtk lalu"
+  },
+  {
+    "id": 1059,
+    "name": "190103 Pasar Lunang",
+    "type": "ATM",
+    "group": "TAPAN",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.19.100.2",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.77",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 1060,
+    "name": "190004 Balai Salasa",
+    "type": "ATM",
+    "group": "TAPAN",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.19.101.2",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.89",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "5 dtk lalu"
+  },
+  {
+    "id": 1061,
+    "name": "190201 Capem Air Haji",
+    "type": "ATM",
+    "group": "TAPAN",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.19.2.50",
+    "status": "UP",
+    "ping": 15,
+    "uptime24h": "99.86",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "22 dtk lalu"
+  },
+  {
+    "id": 1062,
+    "name": "190003 Capem Inderapura",
+    "type": "ATM",
+    "group": "TAPAN",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.19.3.50",
+    "status": "UP",
+    "ping": 25,
+    "uptime24h": "99.79",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 1064,
+    "name": "200002 Kantor KAS Tigo Jangko",
+    "type": "ATM",
+    "group": "LINTAU",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.20.1.50",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.74",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "19 dtk lalu"
+  },
+  {
+    "id": 1065,
+    "name": "20BAS1 Kantor CB Lintau",
+    "type": "ATM",
+    "group": "LINTAU",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.20.0.50",
+    "status": "UP",
+    "ping": 9,
+    "uptime24h": "99.73",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 1067,
+    "name": "211002 Kantor Bupati Mentawai",
+    "type": "ATM",
+    "group": "MENTAWAI",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.27.100.2",
+    "status": "UP",
+    "ping": 25,
+    "uptime24h": "99.84",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 1068,
+    "name": "211003 Rsud Mentawai",
+    "type": "ATM",
+    "group": "MENTAWAI",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.27.101.2",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.78",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 1069,
+    "name": "211004  KC Mentawai",
+    "type": "ATM",
+    "group": "MENTAWAI",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.10.51",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.88",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "4 dtk lalu"
+  },
+  {
+    "id": 1070,
+    "name": "211008 Pasar Tua Pejat Mentawai",
+    "type": "ATM",
+    "group": "MENTAWAI",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.10.50",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.84",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 1071,
+    "name": "211101 Capem Siberut",
+    "type": "ATM",
+    "group": "MENTAWAI",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.27.1.100",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.81",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "26 dtk lalu"
+  },
+  {
+    "id": 1072,
+    "name": "211201 Capem Sikakap",
+    "type": "ATM",
+    "group": "MENTAWAI",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.27.2.50",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.81",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 1073,
+    "name": "211301 Capem Sikabaluan",
+    "type": "ATM",
+    "group": "MENTAWAI",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.27.3.50",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.95",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "4 dtk lalu"
+  },
+  {
+    "id": 1075,
+    "name": "220001 Kantor CB Tapus",
+    "type": "ATM",
+    "group": "TAPUS",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.22.0.50",
+    "status": "UP",
+    "ping": 12,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 1076,
+    "name": "220002 Kantor KAS Panti",
+    "type": "ATM",
+    "group": "TAPUS",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.22.1.50",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.81",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "9 dtk lalu"
+  },
+  {
+    "id": 1077,
+    "name": "220003 Kantor KAS RAO",
+    "type": "ATM",
+    "group": "TAPUS",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "192.22.2.50",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.81",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 1079,
+    "name": "23BAS1 Alahan Panjang",
+    "type": "ATM",
+    "group": "ALAHAN PANJANG",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.23.0.50",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 1080,
+    "name": "230002 Alahan Panjang",
+    "type": "ATM",
+    "group": "ALAHAN PANJANG",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.23.0.51",
+    "status": "UP",
+    "ping": 15,
+    "uptime24h": "99.80",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 1082,
+    "name": "24MLW3 Cabang Jakarta",
+    "type": "ATM",
+    "group": "JAKARTA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.24.0.100",
+    "status": "UP",
+    "ping": 13,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "11 dtk lalu"
+  },
+  {
+    "id": 1083,
+    "name": "24TAB1 Capem Tanah Abang",
+    "type": "ATM",
+    "group": "JAKARTA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.168.242.20",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 1085,
+    "name": "250102 Kantor Capem A yani PKB",
+    "type": "ATM",
+    "group": "PEKANBARU",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.25.100.2",
+    "status": "UP",
+    "ping": 15,
+    "uptime24h": "99.71",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 1086,
+    "name": "25SUD1 Kantor CB Pekanbaru",
+    "type": "ATM",
+    "group": "PEKANBARU",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.25.0.50",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.72",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 1087,
+    "name": "250203 Kantor Capem Panam Pekanbaru",
+    "type": "ATM",
+    "group": "PEKANBARU",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.25.2.50",
+    "status": "UP",
+    "ping": 12,
+    "uptime24h": "99.74",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 1089,
+    "name": "260001 Kantor CB Bandung KTR CABANG",
+    "type": "ATM",
+    "group": "BANDUNG",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.26.0.100",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "100.00",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "22 dtk lalu"
+  },
+  {
+    "id": 1090,
+    "name": "260002 Kantor Pasar Baru Bandung",
+    "type": "ATM",
+    "group": "BANDUNG",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.26.100.2",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.71",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 1091,
+    "name": "260004 Avisena bandung",
+    "type": "ATM",
+    "group": "BANDUNG",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.26.102.2",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.95",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "27 dtk lalu"
+  },
+  {
+    "id": 1093,
+    "name": "300001 CABANG MATRAMAN JAKARTA",
+    "type": "ATM",
+    "group": "MATRAMAN",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.30.0.100",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.80",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "9 dtk lalu"
+  },
+  {
+    "id": 1096,
+    "name": "040014 Sago",
+    "type": "ATM",
+    "group": "PAINAN",
+    "tag": "ICON+",
+    "allTags": [
+      "ATM",
+      "ICON+"
+    ],
+    "ip": "192.4.109.2",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.77",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 1101,
+    "name": "080101 Pasar Ladang Panjang Tigo Nagari LUBUK SIKAPING",
+    "type": "ATM",
+    "group": "Lubuk Sikaping",
+    "tag": "LA",
+    "allTags": [
+      "ATM",
+      "LA"
+    ],
+    "ip": "172.8.1.25",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.79",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "9 dtk lalu"
+  },
+  {
+    "id": 1106,
+    "name": "ATM01 CABUT PEMUDA 01 (50)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.0.102",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.89",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 1107,
+    "name": "ATM02 CABUT PEMUDA 02 (100)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.0.103",
+    "status": "UP",
+    "ping": 12,
+    "uptime24h": "99.84",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 1108,
+    "name": "210009 CABUT PEMUDA 04 (50)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.0.100",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.98",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 1109,
+    "name": "210010 CABUT PEMUDA 05 (100)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.0.101",
+    "status": "UP",
+    "ping": 7,
+    "uptime24h": "99.80",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 1110,
+    "name": "210011 SJS LAPAI",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.111.2",
+    "status": "UP",
+    "ping": 13,
+    "uptime24h": "99.80",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "9 dtk lalu"
+  },
+  {
+    "id": 1111,
+    "name": "210012 TEE BOX",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.115.2",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.93",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "4 dtk lalu"
+  },
+  {
+    "id": 1112,
+    "name": "210013 UIN LB LINTAH",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.108.2",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "5 dtk lalu"
+  },
+  {
+    "id": 1113,
+    "name": "210601 KK PASAR BARU",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.6.50",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.76",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 1114,
+    "name": "210014 RSI SITI RAHMAH",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.102.2",
+    "status": "UP",
+    "ping": 20,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "16 dtk lalu"
+  },
+  {
+    "id": 1115,
+    "name": "100011 SPBU COCO MATA AIR",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.10.101.2",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.89",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "21 dtk lalu"
+  },
+  {
+    "id": 1116,
+    "name": "210084 CAPEM UNAND ADINEGRO (100)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.114.2",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.96",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 1117,
+    "name": "21UNP5 CP UNP 1 KTR (50)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.3.52",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 1118,
+    "name": "210311 CP UNP 2 GALERI (50)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.148.2",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 1119,
+    "name": "210312 CP UNP 3 GALERI (100)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.148.3",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.73",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 1120,
+    "name": "710006 KTR GUBERNUR 1 (50)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.113.2",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.87",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "9 dtk lalu"
+  },
+  {
+    "id": 1121,
+    "name": "710007 KTR GUBERNUR 2 (100)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.113.3",
+    "status": "UP",
+    "ping": 13,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 1122,
+    "name": "210507 CP NIAGA",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.5.50",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.94",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 1123,
+    "name": "211DR3 CP INDARUNG (100)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.112.4",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.89",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 1124,
+    "name": "210019 ARU LUBEG",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.105.2",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.86",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 1125,
+    "name": "210020 UNP MART",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.106.2",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.78",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 1126,
+    "name": "210022 DPRD SUMBAR (100)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.104.2",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "5 dtk lalu"
+  },
+  {
+    "id": 1127,
+    "name": "210024 RS SEMEN PADANG",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.107.2",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 1128,
+    "name": "210025 SPBU KOP,SEMEN PDG",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.139.2",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.98",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 1129,
+    "name": "210026 TOKO EMAS MURNI",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.141.2",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.98",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 1130,
+    "name": "210027 PERTOKOAN ZHOMBIE",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.143.2",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.77",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 1131,
+    "name": "210028 ACIAK MART TGL HITAM",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.142.2",
+    "status": "UP",
+    "ping": 9,
+    "uptime24h": "99.94",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 1132,
+    "name": "210029 G SPORT CENTER",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.138.2",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.77",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 1133,
+    "name": "210030 PANGERAN BEACH HOTEL",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.144.2",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 1134,
+    "name": "210032 CITRA THAMRIN",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.140.2",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.89",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "5 dtk lalu"
+  },
+  {
+    "id": 1135,
+    "name": "210033 GGA MART",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.145.2",
+    "status": "UP",
+    "ping": 26,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "16 dtk lalu"
+  },
+  {
+    "id": 1136,
+    "name": "210034 Smile Swalayan",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.114.2",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.78",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 1137,
+    "name": "210036 OTO BANKING",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.200.5",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.96",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 1138,
+    "name": "NCR 210037 CAPEM UNAND",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.2.50",
+    "status": "UP",
+    "ping": 20,
+    "uptime24h": "99.73",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 1139,
+    "name": "HYS 210038 KANTOR PDAM",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.118.2",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.85",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 1140,
+    "name": "HYS 210040 CITRA SUNGAI BALANG",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.119.2",
+    "status": "UP",
+    "ping": 25,
+    "uptime24h": "99.98",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "19 dtk lalu"
+  },
+  {
+    "id": 1141,
+    "name": "NCR 210042 GILANG RAMADHAN",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.121.2",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "5 dtk lalu"
+  },
+  {
+    "id": 1142,
+    "name": "NCR 210046 LUBUK MINTURUN",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.123.2",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.91",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "16 dtk lalu"
+  },
+  {
+    "id": 1143,
+    "name": "NCR 210044 LUXURY TERANDAM",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.125.2",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.91",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "3 dtk lalu"
+  },
+  {
+    "id": 1144,
+    "name": "NCR 210047 BALAI BARU",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.126.2",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.72",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 1145,
+    "name": "710001 DPKAD KOTA PADANG (GOR)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.127.2",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.98",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "19 dtk lalu"
+  },
+  {
+    "id": 1146,
+    "name": "NCR 210053 DINAS PERIZINAN (CAPIL.)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.151.2",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.76",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 1147,
+    "name": "NCR 210055 BUDIMAN CENGKEH",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.152.2",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.82",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "8 dtk lalu"
+  },
+  {
+    "id": 1148,
+    "name": "NCR 210056 DINAS PENDIDIKAN SUMBAR",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.153.2",
+    "status": "UP",
+    "ping": 9,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "7 dtk lalu"
+  },
+  {
+    "id": 1149,
+    "name": "NCR 210371 CP UNP 4 KTR (50.)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.3.54",
+    "status": "UP",
+    "ping": 13,
+    "uptime24h": "99.84",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 1150,
+    "name": "HYS 210075 BAKEUDA PROV SUMBAR",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.154.2",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.71",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "3 dtk lalu"
+  },
+  {
+    "id": 1151,
+    "name": "HYS 210076 KAMPUS TAMAN SISWA",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.157.2",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 1152,
+    "name": "HYS 210077 RUMAH SAKIT UNAND (100)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.158.2",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.95",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 1153,
+    "name": "HYS 210078 FKG UNAND JATI (100)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.159.2",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.89",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 1154,
+    "name": "HYS 210079 MESJID RAYA SUMBAR",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.160.2",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "3 dtk lalu"
+  },
+  {
+    "id": 1155,
+    "name": "HYS 210080 SMILE SWALAYAN BY PASS",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.161.2",
+    "status": "UP",
+    "ping": 26,
+    "uptime24h": "99.82",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 1156,
+    "name": "HYS 210081 KK ALAI 2 (100)",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.22.31",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.85",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "17 dtk lalu"
+  },
+  {
+    "id": 1157,
+    "name": "HYS 100582 POLTEKES PADANG",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.163.2",
+    "status": "UP",
+    "ping": 21,
+    "uptime24h": "99.75",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "19 dtk lalu"
+  },
+  {
+    "id": 1158,
+    "name": "HYS 219001 CRM CU PEC 50.000",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.0.104",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.86",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 1159,
+    "name": "HYS 210048 ADABIAH",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.115.2",
+    "status": "UP",
+    "ping": 12,
+    "uptime24h": "99.96",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "11 dtk lalu"
+  },
+  {
+    "id": 1160,
+    "name": "NCR 100012 ANRINA SWALAYAN KP JUA",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.10.102.2",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.73",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 1161,
+    "name": "HTC 219002 CRM Alai",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.22.50",
+    "status": "UP",
+    "ping": 18,
+    "uptime24h": "99.93",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "21 dtk lalu"
+  },
+  {
+    "id": 1162,
+    "name": "NCR 210045 BUDIMAN BY PASS KURANJI",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.122.2",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.91",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 1163,
+    "name": "NCR 210016 BUDIMAN ULAK KARANG",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.117.2",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.96",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 1165,
+    "name": "10BLK1 Balaikota Padang",
+    "type": "ATM",
+    "group": "PASAR RAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.1.50",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.75",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 1166,
+    "name": "10BAS1 CABANG PASAR RAYA (50)",
+    "type": "ATM",
+    "group": "PASAR RAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.0.100",
+    "status": "UP",
+    "ping": 15,
+    "uptime24h": "99.86",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "13 dtk lalu"
+  },
+  {
+    "id": 1167,
+    "name": "210035 BL KOTA AIR PACAH (50)",
+    "type": "ATM",
+    "group": "PASAR RAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.147.2",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 1168,
+    "name": "210041 CP SIMPANG HARU (50)",
+    "type": "ATM",
+    "group": "PASAR RAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.6.51",
+    "status": "UP",
+    "ping": 7,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 1169,
+    "name": "210043 RSUP M.DJAMIL 02 (50)",
+    "type": "ATM",
+    "group": "PASAR RAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.124.2",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.85",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 1170,
+    "name": "210049 KTR KAS PRK LAWEH (100)",
+    "type": "ATM",
+    "group": "PASAR RAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.16.50",
+    "status": "UP",
+    "ping": 14,
+    "uptime24h": "99.78",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "23 dtk lalu"
+  },
+  {
+    "id": 1171,
+    "name": "210054 DIKLAT PEGAMBIRAN (50)",
+    "type": "ATM",
+    "group": "PASAR RAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.0.4.200",
+    "status": "UP",
+    "ping": 8,
+    "uptime24h": "99.82",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "18 dtk lalu"
+  },
+  {
+    "id": 1172,
+    "name": "100906 CP BANDAR BUAT (50)",
+    "type": "ATM",
+    "group": "PASAR RAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.10.9.100",
+    "status": "UP",
+    "ping": 10,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "4 dtk lalu"
+  },
+  {
+    "id": 1173,
+    "name": "109601 CRM SIMPANG HARU PEC 50.000",
+    "type": "ATM",
+    "group": "PASAR RAYA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.6.50",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "9 dtk lalu"
+  },
+  {
+    "id": 1175,
+    "name": "100707 CP TABING 01 (100)",
+    "type": "ATM",
+    "group": "SITEBA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.7.50",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "99.82",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 1176,
+    "name": "101310 CP LUBUK BUAYA 01 (50)",
+    "type": "ATM",
+    "group": "SITEBA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.13.50",
+    "status": "UP",
+    "ping": 18,
+    "uptime24h": "99.73",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 1177,
+    "name": "100805 KTR KAS ULAK KARANG (50)",
+    "type": "ATM",
+    "group": "SITEBA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.8.50",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "3 dtk lalu"
+  },
+  {
+    "id": 1178,
+    "name": "101209 CP BELIMBING 01",
+    "type": "ATM",
+    "group": "SITEBA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.12.25",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.87",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 1179,
+    "name": "210018 KTR KAS BY PASS",
+    "type": "ATM",
+    "group": "SITEBA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.14.100",
+    "status": "UP",
+    "ping": 11,
+    "uptime24h": "100.00",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 1180,
+    "name": "210052 CAB SITEBA 02",
+    "type": "ATM",
+    "group": "SITEBA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.5.150",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.81",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "14 dtk lalu"
+  },
+  {
+    "id": 1181,
+    "name": "100772 CP TABING 02",
+    "type": "ATM",
+    "group": "SITEBA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.7.51",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.88",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "12 dtk lalu"
+  },
+  {
+    "id": 1182,
+    "name": "101777 KTR KAS RSUD RASYIDIN",
+    "type": "ATM",
+    "group": "SITEBA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.17.5",
+    "status": "UP",
+    "ping": 7,
+    "uptime24h": "99.83",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "15 dtk lalu"
+  },
+  {
+    "id": 1183,
+    "name": "101210 CP BELIMBING 02",
+    "type": "ATM",
+    "group": "SITEBA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.12.50",
+    "status": "UP",
+    "ping": 19,
+    "uptime24h": "99.84",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "24 dtk lalu"
+  },
+  {
+    "id": 1184,
+    "name": "210083 CP LUBUK BUAYA 02 (100)",
+    "type": "ATM",
+    "group": "SITEBA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.13.100",
+    "status": "UP",
+    "ping": 17,
+    "uptime24h": "99.87",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "9 dtk lalu"
+  },
+  {
+    "id": 1185,
+    "name": "109501 CRM SITEBA PEC 50.000",
+    "type": "ATM",
+    "group": "SITEBA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.10.5.100",
+    "status": "UP",
+    "ping": 23,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "16 dtk lalu"
+  },
+  {
+    "id": 1187,
+    "name": "710003 ADZKIA",
+    "type": "ATM",
+    "group": "CABANG UTAMA",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.21.162.2",
+    "status": "UP",
+    "ping": 27,
+    "uptime24h": "99.92",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "10 dtk lalu"
+  },
+  {
+    "id": 1188,
+    "name": "710002 KC SYARIAH PADANG 100)",
+    "type": "ATM",
+    "group": "SYARIAH PADANG",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.71.0.51",
+    "status": "UP",
+    "ping": 20,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "25 dtk lalu"
+  },
+  {
+    "id": 1189,
+    "name": "710301 SY SIMPANG EMPAT",
+    "type": "ATM",
+    "group": "SYARIAH PADANG",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.71.3.25",
+    "status": "UP",
+    "ping": 15,
+    "uptime24h": "99.90",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "9 dtk lalu"
+  },
+  {
+    "id": 1190,
+    "name": "710401 SY PARIAMAN",
+    "type": "ATM",
+    "group": "SYARIAH PADANG",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "192.71.4.25",
+    "status": "UP",
+    "ping": 22,
+    "uptime24h": "99.95",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "6 dtk lalu"
+  },
+  {
+    "id": 1191,
+    "name": "210075 BAKEUDA PROV SUMBAR",
+    "type": "ATM",
+    "group": "SYARIAH PADANG",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.154.2",
+    "status": "UP",
+    "ping": 16,
+    "uptime24h": "99.86",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "5 dtk lalu"
+  },
+  {
+    "id": 1192,
+    "name": "210013 IAIN LB LINTAH",
+    "type": "ATM",
+    "group": "SYARIAH PADANG",
+    "tag": "Non-Tag",
+    "allTags": [
+      "ATM"
+    ],
+    "ip": "172.21.108.2",
+    "status": "UP",
+    "ping": 24,
+    "uptime24h": "99.77",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "27 dtk lalu"
+  },
+  {
+    "id": 1197,
+    "name": "hdd cctv infra",
+    "type": "ATM",
+    "group": "Lainnya",
+    "tag": "Non-Tag",
+    "allTags": [],
+    "ip": "192.168.1.168",
+    "status": "UP",
+    "ping": 28,
+    "uptime24h": "99.97",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "20 dtk lalu"
+  },
+  {
+    "id": 1199,
+    "name": "Web Bank Nagari",
+    "type": "ATM",
+    "group": "Web Service",
+    "tag": "Non-Tag",
+    "allTags": [
+      "Web Service"
+    ],
+    "ip": "banknagari.co.id",
+    "status": "UP",
+    "ping": 18,
+    "uptime24h": "99.99",
+    "downtime": null,
+    "downSince": null,
+    "reason": "200 OK - Normal Response",
+    "lastChecked": "9 dtk lalu"
+  }
+];
+
+        // State
+        let monitors = [...rawDatabaseMonitors];
+        let currentStatusFilter = 'ALL';
+        let currentTagFilter = 'ALL';
+        let currentGroupFilter = 'ALL';
+        let currentTypeFilter = 'ALL';
+        let searchQuery = '';
+        let viewMode = 'cards';
+
+        // Tag color styling
+        const providerStyles = {
+            'Telkom': { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/20' },
+            'ICON+': { bg: 'bg-indigo-500/10', text: 'text-indigo-400', border: 'border-indigo-500/20' },
+            'LA': { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20' },
+            'Non-Tag': { bg: 'bg-slate-500/10', text: 'text-slate-400', border: 'border-slate-500/20' }
+        };
+
+        // Recalculate KPIs DYNAMICALLY based on Selected Group & Tag
+        function recalculateStats() {
+            // Get all monitors matching the selected Group and Tag
+            const scopeMonitors = monitors.filter(m => {
+                const matchesGroup = (currentGroupFilter === 'ALL') || (m.group === currentGroupFilter);
+                const matchesTag = (currentTagFilter === 'ALL') || (m.tag === currentTagFilter);
+                return matchesGroup && matchesTag;
+            });
+
+            // Update Scope Badge
+            const scopeBadge = document.getElementById('scopeBadge');
+            const resetContainer = document.getElementById('resetScopeContainer');
+            const isCustomScope = (currentGroupFilter !== 'ALL') || (currentTagFilter !== 'ALL');
+
+            if (isCustomScope) {
+                const groupText = currentGroupFilter !== 'ALL' ? `Grup: ${currentGroupFilter}` : 'Semua Wilayah';
+                const tagText = currentTagFilter !== 'ALL' ? `Jaringan: ${currentTagFilter}` : 'Semua Provider';
+                scopeBadge.innerHTML = `<span class="text-[#5cdd8b] font-semibold">${groupText}</span> • <span class="text-white font-medium">${tagText}</span> (${scopeMonitors.length} Monitor)`;
+                resetContainer.classList.remove('hidden');
+            } else {
+                scopeBadge.innerText = 'Seluruh Wilayah (32 Grup) • Semua Provider (' + monitors.length + ' Monitor)';
+                resetContainer.classList.add('hidden');
+            }
+
+            // Segment into ATM and KANTOR within scope
+            const atmList = scopeMonitors.filter(m => m.type === 'ATM');
+            const officeList = scopeMonitors.filter(m => m.type === 'KANTOR');
+
+            const atmDown = atmList.filter(m => m.status === 'DOWN').length;
+            const officeDown = officeList.filter(m => m.status === 'DOWN').length;
+
+            const totalUp = scopeMonitors.filter(m => m.status === 'UP').length;
+            const totalDown = scopeMonitors.filter(m => m.status === 'DOWN').length;
+
+            const atmUp = atmList.length - atmDown;
+            const officeUp = officeList.length - officeDown;
+
+            // CARD 1: ATM
+            document.getElementById('statTotalAtm').innerText = atmList.length;
+            document.getElementById('statAtmOnline').innerText = atmUp;
+            document.getElementById('statAtmOffline').innerText = atmDown;
+            const atmPct = atmList.length > 0 ? ((atmUp / atmList.length) * 100).toFixed(1) : '100.0';
+            document.getElementById('statAtmPercent').innerText = atmPct + '%';
+            document.getElementById('barAtmPercent').style.width = atmPct + '%';
+
+            // CARD 2: KANTOR
+            document.getElementById('statTotalOffice').innerText = officeList.length;
+            document.getElementById('statOfficeOnline').innerText = officeUp;
+            document.getElementById('statOfficeOffline').innerText = officeDown;
+            const officePct = officeList.length > 0 ? ((officeUp / officeList.length) * 100).toFixed(1) : (officeList.length === 0 ? '0.0' : '100.0');
+            document.getElementById('statOfficePercent').innerText = officeList.length > 0 ? (officePct + '%') : 'N/A';
+            document.getElementById('barOfficePercent').style.width = officeList.length > 0 ? (officePct + '%') : '0%';
+
+            // CARD 3: LINK UP
+            document.getElementById('statTotalUp').innerText = totalUp;
+            const globalPct = scopeMonitors.length > 0 ? ((totalUp / scopeMonitors.length) * 100).toFixed(2) : '100.00';
+            document.getElementById('statGlobalSLA').innerText = globalPct + '%';
+            document.getElementById('barGlobalUp').style.width = globalPct + '%';
+
+            // CARD 4: LINK DOWN
+            document.getElementById('statTotalDown').innerText = totalDown;
+            const downPct = scopeMonitors.length > 0 ? ((totalDown / scopeMonitors.length) * 100).toFixed(1) : '0.0';
+            document.getElementById('barGlobalDown').style.width = downPct + '%';
+            
+            const kpiDownCard = document.getElementById('kpiDownCard');
+            const priorityBadge = document.getElementById('priorityBadge');
+            if (totalDown > 0) {
+                kpiDownCard.className = "bg-[#111622] border border-[#dc3545]/40 rounded-2xl p-5 hover:border-[#dc3545] transition-colors relative";
+                priorityBadge.innerText = "TINGGI (URGENT)";
+                priorityBadge.className = "text-[#dc3545] font-mono text-[11px] font-semibold uppercase px-2 py-0.5 rounded bg-[#dc3545]/10 border border-[#dc3545]/20";
+            } else {
+                kpiDownCard.className = "bg-[#111622] border border-[#1e2638] rounded-2xl p-5 hover:border-[#2a354c] transition-colors relative";
+                priorityBadge.innerText = "NORMAL";
+                priorityBadge.className = "text-[#5cdd8b] font-mono text-[11px] font-semibold uppercase px-2 py-0.5 rounded bg-[#5cdd8b]/10 border border-[#5cdd8b]/20";
+            }
+
+            // Status Filter counters
+            document.getElementById('countStatusAll').innerText = scopeMonitors.length;
+            document.getElementById('countStatusUp').innerText = totalUp;
+            document.getElementById('countStatusDown').innerText = totalDown;
+        }
+
+        // Render Critical Outages (High visibility without AI slop)
+        function renderCriticalAlerts() {
+            const container = document.getElementById('criticalAlertSection');
+            
+            // Filter down items matching active group and tag
+            const downInScope = monitors.filter(m => {
+                const matchesGroup = (currentGroupFilter === 'ALL') || (m.group === currentGroupFilter);
+                const matchesTag = (currentTagFilter === 'ALL') || (m.tag === currentTagFilter);
+                return m.status === 'DOWN' && matchesGroup && matchesTag;
+            });
+
+            const allDownItems = monitors.filter(m => m.status === 'DOWN');
+
+            if (downInScope.length === 0) {
+                const hasOutagesElsewhere = allDownItems.length > 0;
+                container.innerHTML = `
+                    <div class="bg-[#111622] border border-[#5cdd8b]/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <span class="w-2.5 h-2.5 rounded-full bg-[#5cdd8b]"></span>
+                            <span class="text-xs font-bold text-[#5cdd8b] tracking-wide uppercase">SEMUA SISTEM JARINGAN NORMAL ${currentGroupFilter !== 'ALL' ? `DI ${currentGroupFilter}` : ''}</span>
+                            <span class="text-xs text-[#828e9e] hidden md:inline">— Seluruh titik link terpantau aman dan terhubung.</span>
+                        </div>
+                        ${hasOutagesElsewhere ? `
+                            <button onclick="resetFilters()" class="text-xs font-mono text-[#dc3545] bg-[#dc3545]/10 px-2.5 py-1 rounded border border-[#dc3545]/30 hover:bg-[#dc3545]/20 transition-colors">
+                                ⚠ ${allDownItems.length} Insiden di Wilayah Lain (Lihat Semua)
+                            </button>
+                        ` : `
+                            <span class="text-xs font-mono text-[#5cdd8b] font-semibold">100% HEALTHY</span>
+                        `}
+                    </div>
+                `;
+                return;
+            }
+
+            const alertItemsHtml = downInScope.map(item => {
+                const tagStyle = providerStyles[item.tag] || providerStyles['Non-Tag'];
+
+                return `
+                    <div class="bg-[#151318] border border-[#dc3545]/20 border-l-2 border-l-[#ef4444] rounded-md px-3 py-2.5 transition-colors hover:border-[#dc3545]/50 hover:bg-[#19161c]">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                            
+                            <!-- Left: Friendly Name prominent -->
+                            <div class="space-y-1 flex-1 min-w-0">
+                                <div class="flex items-center flex-wrap gap-1.5">
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase font-mono tracking-wider bg-[#dc3545]/20 text-[#ffb2b8] border border-[#dc3545]/30">
+                                        OFFLINE
+                                    </span>
+                                    <h3 class="text-xs sm:text-[13px] font-semibold text-slate-100 tracking-tight truncate max-w-[420px]" title="${item.name}">
+                                        ${item.name}
+                                    </h3>
+                                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded font-medium ${item.type === 'ATM' ? 'bg-sky-500/10 text-sky-300 border border-sky-500/20' : 'bg-purple-500/10 text-purple-300 border border-purple-500/20'}">
+                                        ${item.type === 'ATM' ? 'ATM' : 'KANTOR'}
+                                    </span>
+                                </div>
+
+                                <div class="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-400">
+                                    <span>Grup: <b class="text-slate-200 font-medium">${item.group}</b></span>
+                                    <span class="text-slate-600">•</span>
+                                    <span>Tag: <span class="px-1 py-0.5 rounded text-[9px] font-mono font-medium ${tagStyle.bg} ${tagStyle.text} border ${tagStyle.border}">${item.tag}</span></span>
+                                    <span class="text-slate-600">•</span>
+                                    <span class="font-mono text-slate-400">IP: ${item.ip}</span>
+                                    <span class="text-slate-600">•</span>
+                                    <span class="text-rose-400 font-mono">${item.reason}</span>
+                                </div>
+                            </div>
+
+                            <!-- Right: Duration & Quick Ping -->
+                            <div class="flex items-center justify-between md:justify-end gap-3.5 shrink-0 min-w-[150px] pt-1 md:pt-0">
+                                <div class="text-right font-mono shrink-0 min-w-[70px]">
+                                    <div class="text-[11px] font-bold text-rose-300">${item.downtime || 'Baru Saja'}</div>
+                                    <div class="text-[9px] text-slate-500">Durasi Offline</div>
+                                </div>
+                                <button onclick="quickPing('${item.name}', '${item.ip}')" class="px-2 py-1 text-[10px] font-medium rounded bg-[#1a2230] hover:bg-[#222d3f] border border-[#334155] text-slate-200 transition-colors">
+                                    Re-Ping
+                                </button>
+                            </div>
+
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="bg-[#111622] border border-[#dc3545]/30 border-l-2 border-l-[#ef4444] rounded-lg p-3 space-y-2.5">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-[#ef4444] shadow-[0_0_0_3px_rgba(239,68,68,0.2)]"></span>
+                            <h2 class="text-[11px] font-bold uppercase tracking-wider text-rose-400 font-mono">
+                                PERINGATAN LINK GANGGUAN
+                            </h2>
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#dc3545]/15 text-rose-300 border border-[#dc3545]/30">
+                                ${downInScope.length} PERANGKAT OFFLINE ${currentGroupFilter !== 'ALL' ? `DI ${currentGroupFilter}` : ''}
+                            </span>
+                        </div>
+                        <span class="text-[10px] text-slate-400">Segera koordinasi dengan ISP / Tim terkait</span>
+                    </div>
+                    <div class="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
+                        ${alertItemsHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render Regional Breakdown (Top 10 groups by volume)
+        function renderRegionalBreakdown() {
+            const container = document.getElementById('regionalBreakdownContainer');
+            
+            const groupMap = {};
+            monitors.forEach(m => {
+                if (!groupMap[m.group]) groupMap[m.group] = { total: 0, up: 0, down: 0 };
+                groupMap[m.group].total++;
+                if (m.status === 'UP') groupMap[m.group].up++;
+                else groupMap[m.group].down++;
+            });
+
+            // Sort by total monitors descending
+            const sortedGroups = Object.entries(groupMap).sort((a, b) => b[1].total - a[1].total).slice(0, 10);
+
+            container.innerHTML = sortedGroups.map(([grp, stats]) => {
+                const percent = ((stats.up / stats.total) * 100).toFixed(0);
+                const hasDown = stats.down > 0;
+                const isSelected = currentGroupFilter === grp;
+
+                return `
+                    <div onclick="selectGroupDirectly('${grp}')" class="p-2.5 rounded-xl cursor-pointer transition-all ${isSelected ? 'bg-[#1b2334] border border-[#5cdd8b]/50 ring-1 ring-[#5cdd8b]/30' : (hasDown ? 'bg-[#090c12] border border-[#dc3545]/30 hover:border-[#dc3545]/60' : 'bg-[#090c12] border border-[#1e2638] hover:border-[#2a354c]')}">
+                        <div class="flex items-center justify-between text-xs mb-1">
+                            <span class="font-medium ${isSelected ? 'text-[#5cdd8b] font-semibold' : 'text-white'} truncate max-w-[170px]" title="${grp}">${grp}</span>
+                            <div class="flex items-center gap-2 font-mono text-[11px]">
+                                <span class="text-[#828e9e]">${stats.up}/${stats.total}</span>
+                                <span class="${hasDown ? 'text-[#dc3545] font-semibold' : 'text-[#5cdd8b]'}">${percent}%</span>
+                            </div>
+                        </div>
+                        <div class="w-full bg-[#161c2b] h-1 rounded-full overflow-hidden flex">
+                            <div class="bg-[#5cdd8b] h-full" style="width: ${percent}%"></div>
+                            ${hasDown ? `<div class="bg-[#dc3545] h-full" style="width: ${100 - percent}%"></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Render Provider Tag Breakdown
+        function renderProviderBreakdown() {
+            const container = document.getElementById('providerBreakdownContainer');
+            
+            const tagMap = {};
+            monitors.forEach(m => {
+                if (!tagMap[m.tag]) tagMap[m.tag] = { total: 0, up: 0, down: 0 };
+                tagMap[m.tag].total++;
+                if (m.status === 'UP') tagMap[m.tag].up++;
+                else tagMap[m.tag].down++;
+            });
+
+            container.innerHTML = Object.entries(tagMap).map(([tag, stats]) => {
+                const percent = ((stats.up / stats.total) * 100).toFixed(1);
+                const hasDown = stats.down > 0;
+                const isSelected = currentTagFilter === tag;
+                const style = providerStyles[tag] || providerStyles['Non-Tag'];
+
+                return `
+                    <div onclick="setTagFilter('${tag}')" class="p-3 rounded-xl cursor-pointer transition-all ${isSelected ? 'bg-[#1b2334] border border-[#5cdd8b]/50 ring-1 ring-[#5cdd8b]/30' : (hasDown ? 'bg-[#090c12] border border-[#dc3545]/30 hover:border-[#dc3545]/60' : 'bg-[#090c12] border border-[#1e2638] hover:border-[#2a354c]')}">
+                        <div class="flex items-center justify-between text-xs mb-1.5">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold ${style.bg} ${style.text} border ${style.border}">
+                                ${tag === 'Non-Tag' ? 'Tanpa Tag ISP' : tag}
+                            </span>
+                            <span class="font-mono text-xs ${hasDown ? 'text-[#dc3545] font-semibold' : 'text-[#5cdd8b]'}">
+                                ${stats.up}/${stats.total} Online (${percent}%)
+                            </span>
+                        </div>
+                        <div class="w-full bg-[#161c2b] h-1.5 rounded-full overflow-hidden flex">
+                            <div class="bg-[#5cdd8b] h-full" style="width: ${percent}%"></div>
+                            ${hasDown ? `<div class="bg-[#dc3545] h-full" style="width: ${100 - percent}%"></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Render Monitor Items (Card View vs Table View)
+        function renderMonitors() {
+            const container = document.getElementById('monitorsListContainer');
+
+            // Apply all filters: Group, Tag, Type, Status, Search
+            const filtered = monitors.filter(m => {
+                const matchesStatus = (currentStatusFilter === 'ALL') || (m.status === currentStatusFilter);
+                const matchesTag = (currentTagFilter === 'ALL') || (m.tag === currentTagFilter);
+                const matchesGroup = (currentGroupFilter === 'ALL') || (m.group === currentGroupFilter);
+                const matchesType = (currentTypeFilter === 'ALL') || (m.type === currentTypeFilter);
+                const matchesSearch = searchQuery === '' || 
+                    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    m.group.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    m.ip.toLowerCase().includes(searchQuery.toLowerCase());
+
+                return matchesStatus && matchesTag && matchesGroup && matchesType && matchesSearch;
+            });
+
+            document.getElementById('filteredBadgeCount').innerText = `${filtered.length} Item`;
+            document.getElementById('showingItemsCount').innerText = filtered.length;
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="p-12 text-center text-[#828e9e] space-y-2">
+                        <p class="text-sm font-medium text-white">Tidak ada monitor yang cocok dengan kriteria filter.</p>
+                        <p class="text-xs">Coba ubah kata kunci pencarian atau reset filter.</p>
+                        <button onclick="resetFilters()" class="mt-2 px-3 py-1.5 rounded-lg bg-[#161c2b] border border-[#1e2638] text-xs text-slate-300 hover:text-white">Reset Filter</button>
+                    </div>
+                `;
+                return;
+            }
+
+            if (viewMode === 'cards') {
+                container.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+                        ${filtered.map(m => {
+                            const isDown = m.status === 'DOWN';
+                            const tagStyle = providerStyles[m.tag] || providerStyles['Non-Tag'];
+
+                            return `
+                                <div class="rounded-xl p-4 transition-colors ${isDown ? 'bg-[#141217] border border-[#dc3545]/40' : 'bg-[#090c12] border border-[#1e2638] hover:border-[#2a354c]'}">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-[10px] font-mono px-2 py-0.5 rounded font-medium ${m.type === 'ATM' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'}">
+                                                ${m.type}
+                                            </span>
+                                            <span class="text-[10px] font-mono font-medium px-2 py-0.5 rounded ${tagStyle.bg} ${tagStyle.text} border ${tagStyle.border}">
+                                                ${m.tag === 'Non-Tag' ? 'Non-ISP' : m.tag}
+                                            </span>
+                                        </div>
+                                        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono font-bold ${isDown ? 'bg-[#dc3545]/20 text-[#dc3545] border border-[#dc3545]/30' : 'bg-[#5cdd8b]/15 text-[#5cdd8b] border border-[#5cdd8b]/20'}">
+                                            <span class="w-1.5 h-1.5 rounded-full ${isDown ? 'bg-[#dc3545]' : 'bg-[#5cdd8b]'}"></span>
+                                            ${m.status}
+                                        </span>
+                                    </div>
+
+                                    <!-- FRIENDLY NAME (Mencolok dan Jelas) -->
+                                    <h4 class="mt-2.5 text-xs sm:text-sm font-semibold text-white tracking-tight leading-snug line-clamp-2 hover:text-[#5cdd8b] transition-colors cursor-pointer" title="${m.name}">
+                                        ${m.name}
+                                    </h4>
+
+                                    <div class="mt-1.5 text-xs text-[#828e9e] truncate flex items-center justify-between">
+                                        <span>Grup: <b class="text-slate-300 font-medium">${m.group}</b></span>
+                                        <span class="font-mono text-[11px] text-slate-500">${m.ip}</span>
+                                    </div>
+
+                                    <div class="mt-3 pt-2.5 border-t border-[#182030] grid grid-cols-3 gap-2 text-center text-xs font-mono">
+                                        <div class="bg-[#111622] p-1.5 rounded border border-[#1e2638]">
+                                            <div class="text-[9px] text-[#828e9e] uppercase">Ping</div>
+                                            <div class="font-semibold ${isDown ? 'text-[#dc3545]' : 'text-[#5cdd8b]'}">${isDown ? 'RTO' : m.ping + 'ms'}</div>
+                                        </div>
+                                        <div class="bg-[#111622] p-1.5 rounded border border-[#1e2638]">
+                                            <div class="text-[9px] text-[#828e9e] uppercase">Uptime</div>
+                                            <div class="font-medium text-slate-200">${m.uptime24h}%</div>
+                                        </div>
+                                        <div class="bg-[#111622] p-1.5 rounded border border-[#1e2638]">
+                                            <div class="text-[9px] text-[#828e9e] uppercase">Checked</div>
+                                            <div class="font-medium text-slate-400 truncate">${m.lastChecked}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            } else {
+                // Table View (NOC Density)
+                container.innerHTML = `
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-[#090c12] text-[#828e9e] font-mono uppercase tracking-wider text-[11px] border-b border-[#1b2234]">
+                                <tr>
+                                    <th class="py-2.5 px-3">Status</th>
+                                    <th class="py-2.5 px-3">Nama Monitor (Friendly Name)</th>
+                                    <th class="py-2.5 px-3">Tipe</th>
+                                    <th class="py-2.5 px-3">Grup Lokasi</th>
+                                    <th class="py-2.5 px-3">Tag Jaringan</th>
+                                    <th class="py-2.5 px-3">Target IP</th>
+                                    <th class="py-2.5 px-3 text-center">Ping</th>
+                                    <th class="py-2.5 px-3 text-center">Uptime 24h</th>
+                                    <th class="py-2.5 px-3 text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-[#1b2234] font-mono">
+                                ${filtered.map(m => {
+                                    const isDown = m.status === 'DOWN';
+                                    const tagStyle = providerStyles[m.tag] || providerStyles['Non-Tag'];
+
+                                    return `
+                                        <tr class="hover:bg-[#111622] transition-colors ${isDown ? 'bg-[#181316]' : ''}">
+                                            <td class="py-2.5 px-3 whitespace-nowrap">
+                                                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold ${isDown ? 'bg-[#dc3545]/20 text-[#dc3545] border border-[#dc3545]/30' : 'bg-[#5cdd8b]/15 text-[#5cdd8b] border border-[#5cdd8b]/20'}">
+                                                    <span class="w-1.5 h-1.5 rounded-full ${isDown ? 'bg-[#dc3545]' : 'bg-[#5cdd8b]'}"></span>
+                                                    ${m.status}
+                                                </span>
+                                            </td>
+                                            <td class="py-2.5 px-3 font-sans font-semibold text-white whitespace-nowrap">
+                                                <div class="hover:text-[#5cdd8b] cursor-pointer">${m.name}</div>
+                                                ${isDown ? `<div class="text-[10px] font-mono text-[#dc3545]">${m.downtime || ''} (${m.reason})</div>` : ''}
+                                            </td>
+                                            <td class="py-2.5 px-3 whitespace-nowrap">
+                                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded ${m.type === 'ATM' ? 'bg-blue-500/10 text-blue-400' : 'bg-purple-500/10 text-purple-400'}">
+                                                    ${m.type}
+                                                </span>
+                                            </td>
+                                            <td class="py-2.5 px-3 font-sans text-slate-300 whitespace-nowrap">${m.group}</td>
+                                            <td class="py-2.5 px-3 whitespace-nowrap">
+                                                <span class="text-[10px] font-mono px-2 py-0.5 rounded font-semibold ${tagStyle.bg} ${tagStyle.text} border ${tagStyle.border}">
+                                                    ${m.tag === 'Non-Tag' ? 'Non-ISP' : m.tag}
+                                                </span>
+                                            </td>
+                                            <td class="py-2.5 px-3 text-slate-400 whitespace-nowrap">${m.ip}</td>
+                                            <td class="py-2.5 px-3 text-center whitespace-nowrap font-semibold ${isDown ? 'text-[#dc3545]' : 'text-[#5cdd8b]'}">
+                                                ${isDown ? 'TIMEOUT' : m.ping + 'ms'}
+                                            </td>
+                                            <td class="py-2.5 px-3 text-center whitespace-nowrap text-slate-300">${m.uptime24h}%</td>
+                                            <td class="py-2.5 px-3 text-right whitespace-nowrap">
+                                                <button onclick="quickPing('${m.name}', '${m.ip}')" class="px-2 py-1 rounded bg-[#161c2b] border border-[#1e2638] hover:border-slate-500 text-[11px] text-slate-300">
+                                                    Ping
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+        }
+
+        // Direct Group Click
+        function selectGroupDirectly(grp) {
+            currentGroupFilter = grp;
+            document.getElementById('groupFilter').value = grp;
+            applyFilters();
+        }
+
+        // Filter Actions
+        function setStatusFilter(status) {
+            currentStatusFilter = status;
+            
+            const btnAll = document.getElementById('filterStatusAll');
+            const btnUp = document.getElementById('filterStatusUp');
+            const btnDown = document.getElementById('filterStatusDown');
+
+            [btnAll, btnUp, btnDown].forEach(b => {
+                b.className = "px-3 py-1.5 rounded-lg font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-1.5";
+            });
+
+            if (status === 'ALL') {
+                btnAll.className = "px-3 py-1.5 rounded-lg font-medium bg-[#161c2b] text-white transition-colors";
+            } else if (status === 'UP') {
+                btnUp.className = "px-3 py-1.5 rounded-lg font-medium bg-[#5cdd8b]/15 text-[#5cdd8b] border border-[#5cdd8b]/30 transition-colors flex items-center gap-1.5";
+            } else if (status === 'DOWN') {
+                btnDown.className = "px-3 py-1.5 rounded-lg font-medium bg-[#dc3545]/15 text-[#dc3545] border border-[#dc3545]/30 transition-colors flex items-center gap-1.5";
+            }
+
+            renderMonitors();
+        }
+
+        function setTagFilter(tag) {
+            currentTagFilter = tag;
+            const buttons = document.querySelectorAll('[id^="tagBtn-"]');
+            buttons.forEach(b => {
+                b.className = "px-2.5 py-1 rounded-md text-[11px] font-medium bg-[#111622] text-slate-400 border border-[#1e2638] hover:border-slate-600 hover:text-slate-200 transition-colors";
+            });
+
+            const activeBtn = document.getElementById(`tagBtn-${tag}`);
+            if (activeBtn) {
+                activeBtn.className = "px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white/10 text-white border border-white/20 transition-colors";
+            }
+
+            // RECALCULATE DYNAMICALLY!
+            recalculateStats();
+            renderCriticalAlerts();
+            renderProviderBreakdown();
+            renderMonitors();
+        }
+
+        function applyFilters() {
+            searchQuery = document.getElementById('searchInput').value;
+            currentGroupFilter = document.getElementById('groupFilter').value;
+            currentTypeFilter = document.getElementById('typeFilter').value;
+
+            // RECALCULATE DYNAMICALLY!
+            recalculateStats();
+            renderCriticalAlerts();
+            renderRegionalBreakdown();
+            renderMonitors();
+        }
+
+        function setViewMode(mode) {
+            viewMode = mode;
+            const btnCards = document.getElementById('btnViewCards');
+            const btnTable = document.getElementById('btnViewTable');
+
+            if (mode === 'cards') {
+                btnCards.className = "px-2.5 py-1 rounded font-medium bg-[#161c2b] text-white transition-colors";
+                btnTable.className = "px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition-colors";
+            } else {
+                btnTable.className = "px-2.5 py-1 rounded font-medium bg-[#161c2b] text-white transition-colors";
+                btnCards.className = "px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition-colors";
+            }
+
+            renderMonitors();
+        }
+
+        function resetFilters() {
+            currentStatusFilter = 'ALL';
+            currentTagFilter = 'ALL';
+            currentGroupFilter = 'ALL';
+            currentTypeFilter = 'ALL';
+            searchQuery = '';
+            document.getElementById('searchInput').value = '';
+            document.getElementById('groupFilter').value = 'ALL';
+            document.getElementById('typeFilter').value = 'ALL';
+            
+            // reset tag buttons
+            const buttons = document.querySelectorAll('[id^="tagBtn-"]');
+            buttons.forEach(b => {
+                b.className = "px-2.5 py-1 rounded-md text-[11px] font-medium bg-[#111622] text-slate-400 border border-[#1e2638] hover:border-slate-600 hover:text-slate-200 transition-colors";
+            });
+            const activeBtn = document.getElementById('tagBtn-ALL');
+            if (activeBtn) {
+                activeBtn.className = "px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white/10 text-white border border-white/20 transition-colors";
+            }
+
+            setStatusFilter('ALL');
+            recalculateStats();
+            renderCriticalAlerts();
+            renderRegionalBreakdown();
+            renderProviderBreakdown();
+            renderMonitors();
+        }
+
+        // Simulation Toggle
+        function simulateToggleOutage() {
+            const target = monitors.find(m => m.name.includes('Payakumbuh - 1'));
+            if (target) {
+                if (target.status === 'DOWN') {
+                    target.status = 'UP';
+                    target.ping = 16;
+                    target.downtime = null;
+                    target.reason = '200 OK - Recovered';
+                    showToast('Link Pulih', `${target.name} kembali online.`);
+                } else {
+                    target.status = 'DOWN';
+                    target.ping = 0;
+                    target.downtime = 'Baru Saja';
+                    target.downSince = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+                    target.reason = 'Request timed out (100% loss)';
+                    showToast('Link Terputus', `${target.name} mengalami gangguan!`);
+                }
+
+                recalculateStats();
+                renderCriticalAlerts();
+                renderRegionalBreakdown();
+                renderProviderBreakdown();
+                renderMonitors();
+            }
+        }
+
+        // Quick Ping
+        function quickPing(name, ip) {
+            showToast('Ping Terkirim', `Menguji koneksi ke ${name} (${ip})`);
+        }
+
+        // Copy Status Report
+        function copyStatusReport() {
+            const down = monitors.filter(m => m.status === 'DOWN');
+            let text = `LAPORAN MONITORING JARINGAN NOC\n`;
+            text += `Waktu: ${new Date().toLocaleString('id-ID')}\n`;
+            text += `Total Link: ${monitors.length} | UP: ${monitors.length - down.length} | DOWN: ${down.length}\n\n`;
+            if (down.length > 0) {
+                text += `DAFTAR GANGGUAN AKTIF:\n`;
+                down.forEach((d, i) => {
+                    text += `${i + 1}. [${d.type}] ${d.name}\n   - Lokasi: ${d.group} | Provider: ${d.tag}\n   - IP: ${d.ip} | Downtime: ${d.downtime} (${d.reason})\n\n`;
+                });
+            } else {
+                text += `Seluruh link ATM & Kantor terpantau normal.\n`;
+            }
+
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Laporan Disalin', 'Ringkasan siap dikirim ke WhatsApp / Telegram NOC.');
+            }).catch(() => {});
+        }
+
+        // Toast feedback
+        function showToast(title, msg) {
+            const t = document.getElementById('toast');
+            document.getElementById('toastTitle').innerText = title;
+            document.getElementById('toastMsg').innerText = msg;
+            t.classList.remove('translate-y-16', 'opacity-0');
+            setTimeout(() => {
+                t.classList.add('translate-y-16', 'opacity-0');
+            }, 3000);
+        }
+
+        // Live Clock
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('liveClock').innerText = now.toLocaleTimeString('id-ID', { hour12: false }) + ' WIB';
+            document.getElementById('liveDate').innerText = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        }
+
+        // Initial Renders
+        recalculateStats();
+        renderCriticalAlerts();
+        renderRegionalBreakdown();
+        renderProviderBreakdown();
+        renderMonitors();
+    </script>
+</body>
+</html>

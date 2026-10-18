@@ -23,28 +23,35 @@ export default {
         // 2. Vue Frontend Dev
         // 3. Vue Frontend Dev (not setup database yet)
         let res;
-        try {
-            res = (await axios.get("/api/entry-page")).data;
-
-            if (res.type === "statusPageMatchedDomain") {
-                this.statusPageSlug = res.statusPageSlug;
-                this.$root.forceStatusPageTheme = true;
-            } else if (res.type === "entryPage") {
-                // Dev only. For production, the logic is in the server side
-                const entryPage = res.entryPage;
-                if (entryPage?.startsWith("statusPage-")) {
-                    this.$router.push("/status/" + entryPage.replace("statusPage-", ""));
-                } else {
-                    // should the old setting style still exist here?
-                    this.$router.push("/dashboard");
+        for (let i = 0; i < 20; i++) {
+            try {
+                res = (await axios.get("/api/entry-page")).data;
+                break;
+            } catch (e) {
+                if (i === 19) {
+                    alert("Cannot connect to the backend server. Did you start the backend server? (npm run start-server-dev)");
+                    return;
                 }
-            } else if (res.type === "setup-database") {
-                this.$router.push("/setup-database");
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+        }
+
+        if (res.type === "statusPageMatchedDomain") {
+            this.statusPageSlug = res.statusPageSlug;
+            this.$root.forceStatusPageTheme = true;
+        } else if (res.type === "entryPage") {
+            // Dev only. For production, the logic is in the server side
+            const entryPage = res.entryPage;
+            if (entryPage?.startsWith("statusPage-")) {
+                this.$router.push("/status/" + entryPage.replace("statusPage-", ""));
             } else {
+                // should the old setting style still exist here?
                 this.$router.push("/dashboard");
             }
-        } catch (e) {
-            alert("Cannot connect to the backend server. Did you start the backend server? (npm run start-server-dev)");
+        } else if (res.type === "setup-database") {
+            this.$router.push("/setup-database");
+        } else {
+            this.$router.push("/dashboard");
         }
     },
 };
