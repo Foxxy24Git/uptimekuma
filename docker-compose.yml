@@ -1,0 +1,27 @@
+services:
+  uptime-kuma-custom:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: uptime-kuma-custom:local
+    container_name: uptime-kuma-custom
+    ports:
+      - "3003:3001"
+    volumes:
+      - uptime_kuma_custom_data:/app/data
+    restart: unless-stopped
+    init: true
+    environment:
+      UPTIME_KUMA_IS_CONTAINER: "1"
+      TZ: "Asia/Jakarta"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3001/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
+
+volumes:
+  uptime_kuma_custom_data:
+    name: uptime_kuma_custom_data
+
