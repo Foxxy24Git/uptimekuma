@@ -7,7 +7,7 @@ ENV NODE_ENV=production \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends dumb-init ca-certificates curl \
+    && apt-get install -y --no-install-recommends dumb-init ca-certificates curl iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json .npmrc ./

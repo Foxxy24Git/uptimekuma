@@ -25,3 +25,8 @@ volumes:
   uptime_kuma_custom_data:
     name: uptime_kuma_custom_data
 
+networks:
+  default:
+    name: uptime-kuma_default
+    external: true
+
