@@ -11,12 +11,13 @@ RUN apt-get update \
     && chmod u+s /bin/ping \
     && rm -rf /var/lib/apt/lists/*
 
-COPY package.json package-lock.json .npmrc ./
+RUN mkdir -p /app/data && chown -R node:node /app/data
+
+COPY --chown=node:node package.json package-lock.json .npmrc ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
-COPY . .
+COPY --chown=node:node . .
 
-RUN mkdir -p /app/data && chown -R node:node /app
 USER node
 
 EXPOSE 3001
