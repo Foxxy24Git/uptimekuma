@@ -288,6 +288,7 @@
 <script>
 import dayjs from "dayjs";
 import { UP, DOWN } from "../util.ts";
+import { buildNodesByGroup, getRepelWeight } from "../noc-graph-cluster";
 
 export default {
     name: "NocGraphView",
@@ -328,6 +329,8 @@ export default {
             nodes: [],
             links: [],
             particles: [],
+            nodesByGroup: new Map(),
+            groupMembers: new Map(),
 
             // Interaction State
             hoveredNode: null,
@@ -611,6 +614,7 @@ export default {
 
                 node.status = status;
                 node.ping = ping;
+                node.repelWeight = getRepelWeight(node);
 
                 if (status === "down") {
                     hasAnyDown = true;
@@ -832,6 +836,7 @@ export default {
 
             // 4. Create Leaf Nodes for ATM / Backup / Devices
             let hasAnyDown = false;
+            const groupMemberCount = new Map();
             filteredMonitors.forEach((m, idx) => {
                 const nodeId = "MON_" + m.id;
                 const existing = existingNodeMap.get(nodeId);
@@ -854,6 +859,8 @@ export default {
                 const defaultY = parentGroup ? parentGroup.y + Math.sin(angle) * spread : (Math.random() * 200 - 100);
 
                 const radius = m.type === "KANTOR" ? 8 : (m.type === "BACKUP" ? 5.5 : 4.5);
+                const clusterAngleIndex = groupMemberCount.get(m.group) || 0;
+                groupMemberCount.set(m.group, clusterAngleIndex + 1);
 
                 const node = {
                     id: nodeId,
@@ -871,6 +878,11 @@ export default {
                     vx: existing ? existing.vx : 0,
                     vy: existing ? existing.vy : 0,
                     connectedCount: 1,
+                    clusterKey: m.group,
+                    parentId: parentGroup ? parentGroup.id : null,
+                    clusterAngleIndex: clusterAngleIndex,
+                    clusterIndex: clusterAngleIndex,
+                    repelWeight: getRepelWeight({ status }),
                 };
 
                 newNodes.push(node);
@@ -917,6 +929,9 @@ export default {
 
             this.nodes = newNodes;
             this.links = newLinks;
+            const nodesByGroup = buildNodesByGroup(newNodes);
+            this.nodesByGroup = nodesByGroup;
+            this.groupMembers = nodesByGroup;
 
             // Generate particles along links
             this.initParticles();
