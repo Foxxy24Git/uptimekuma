@@ -41,17 +41,18 @@ async function sendNotificationList(socket) {
  * @param {number} monitorID ID of monitor to send heartbeat history
  * @param {boolean} toUser  True = send to all browsers with the same user id, False = send to the current browser only
  * @param {boolean} overwrite Overwrite client-side's heartbeat list
+ * @param {number} limit Number of latest rows to load (default 100, use 1 for dashboard initial load)
  * @returns {Promise<void>}
  */
-async function sendHeartbeatList(socket, monitorID, toUser = false, overwrite = false) {
+async function sendHeartbeatList(socket, monitorID, toUser = false, overwrite = false, limit = 100) {
     let list = await R.getAll(
         `
         SELECT * FROM heartbeat
         WHERE monitor_id = ?
         ORDER BY time DESC
-        LIMIT 100
+        LIMIT ?
     `,
-        [monitorID]
+        [monitorID, limit]
     );
 
     let result = list.reverse();
@@ -60,6 +61,38 @@ async function sendHeartbeatList(socket, monitorID, toUser = false, overwrite = 
         io.to(socket.userID).emit("heartbeatList", monitorID, result, overwrite);
     } else {
         socket.emit("heartbeatList", monitorID, result, overwrite);
+    }
+}
+
+/**
+ * Send only the latest heartbeat for every monitor in a single query.
+ * Used during initial login to avoid loading full history per monitor.
+ * @param {Socket} socket Socket.io socket instance
+ * @param {number[]} monitorIDs Monitor IDs visible to the user
+ * @returns {Promise<void>}
+ */
+async function sendLatestHeartbeatList(socket, monitorIDs) {
+    if (monitorIDs.length === 0) {
+        return;
+    }
+
+    const placeholders = monitorIDs.map(() => "?").join(", ");
+    const list = await R.getAll(
+        `
+        SELECT heartbeat.*
+        FROM heartbeat
+        INNER JOIN (
+            SELECT monitor_id, MAX(id) AS heartbeat_id
+            FROM heartbeat
+            WHERE monitor_id IN (${placeholders})
+            GROUP BY monitor_id
+        ) latest ON heartbeat.id = latest.heartbeat_id
+    `,
+        monitorIDs
+    );
+
+    for (const heartbeat of list) {
+        socket.emit("heartbeatList", heartbeat.monitor_id, [heartbeat], false);
     }
 }
 
@@ -239,6 +272,7 @@ module.exports = {
     sendNotificationList,
     sendImportantHeartbeatList,
     sendHeartbeatList,
+    sendLatestHeartbeatList,
     sendProxyList,
     sendAPIKeyList,
     sendInfo,

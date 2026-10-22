@@ -166,6 +166,7 @@ const testMode = !!args["test"] || false;
 const {
     sendNotificationList,
     sendHeartbeatList,
+    sendLatestHeartbeatList,
     sendInfo,
     sendProxyList,
     sendDockerHostList,
@@ -680,6 +681,14 @@ app.use(function (req, res, next) {
                 callback({
                     ok: true,
                     monitor: monitor.toJSON(preloadData),
+                });
+
+                // Optimasi Prioritas 3: Muat stats dan history lengkap hanya ketika detail monitor dibuka
+                Monitor.sendStats(io, monitorID, socket.userID).catch((e) => {
+                    log.error("monitor", e);
+                });
+                sendHeartbeatList(socket, monitorID, false, true, 100).catch((e) => {
+                    log.error("monitor", e);
                 });
             } catch (e) {
                 callback({
@@ -1455,13 +1464,16 @@ async function afterLogin(socket, user) {
 
     await StatusPage.sendStatusPageList(io, socket);
 
-    const monitorPromises = [];
-    for (let monitorID in monitorList) {
-        monitorPromises.push(sendHeartbeatList(socket, monitorID));
-        monitorPromises.push(Monitor.sendStats(io, monitorID, user.id));
-    }
+    // Optimasi Prioritas 3: Kirim hanya heartbeat terbaru untuk seluruh monitor
+    // dalam satu query batch, bukan 100 history per monitor.
+    const monitorIDs = Object.keys(monitorList).map((id) => Number(id));
+    await Promise.allSettled([
+        sendLatestHeartbeatList(socket, monitorIDs),
+    ]);
 
-    await Promise.all(monitorPromises);
+    // Monitor.sendStats() ditunda: dipanggil saat monitor detail dibuka
+    // (lihat socket "getMonitor") sehingga monitor yang tidak terlihat
+    // tidak memicu query uptime/cert/domain.
 
     // Set server timezone from client browser if not set
     // It should be run once only

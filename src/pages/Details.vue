@@ -610,6 +610,7 @@ export default {
         },
 
         monitor(to) {
+            this.loadDetailData();
             this.getImportantHeartbeatListLength();
         },
         "monitor.type"() {
@@ -623,6 +624,9 @@ export default {
     },
 
     mounted() {
+        // Optimasi Prioritas 3: Muat history lengkap + statistik saat detail monitor dibuka.
+        this.loadDetailData();
+
         this.getImportantHeartbeatListLength();
 
         this.$root.emitter.on("newImportantHeartbeat", this.onNewImportantHeartbeat);
@@ -641,6 +645,16 @@ export default {
 
     methods: {
         getResBaseURL,
+
+        loadDetailData() {
+            if (!this.monitor) {
+                return;
+            }
+
+            const socket = this.$root.getSocket();
+            socket.emit("getMonitor", this.monitor.id, () => {});
+        },
+
         /**
          * Request a test notification be sent for this monitor
          * @returns {void}

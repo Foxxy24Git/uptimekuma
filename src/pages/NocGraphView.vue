@@ -175,6 +175,17 @@
                             </div>
                         </div>
 
+                        <!-- Info mode cluster / status fisika (Prioritas 4) -->
+                        <div class="noc-physics-status small font-mono" :class="physicsStatusClass">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span>MODE FISIKA</span>
+                                <span class="fw-bold">{{ physicsModeLabel }}</span>
+                            </div>
+                            <div class="mt-1 text-secondary">
+                                {{ physicsStatusDetail }}
+                            </div>
+                        </div>
+
                         <div class="d-flex align-items-center justify-content-between mb-2">
                             <span class="text-secondary small">Garis Tag Selalu Tampil:</span>
                             <div class="form-check form-switch mb-0">
@@ -302,6 +313,8 @@ export default {
             enableParticles: true,
             alwaysShowLabels: false,
             isPhysicsActive: true,
+            physicsNodeLimit: 180,
+            physicsStableFrames: 0,
             linkDistance: 80,
 
             // Camera Transformation (Pan & Zoom)
@@ -379,10 +392,37 @@ export default {
             });
         },
 
+        // Signature topology: hanya berubah jika monitor ditambah, dihapus,
+        // diubah namanya, grupnya, atau tag-nya.
+        topologySignature() {
+            return this.allMonitors.map(m => `${m.id}:${m.name}:${m.group}:${m.type}:${m.tag}`).join("|");
+        },
+
         availableGroups() {
             const groups = new Set();
             this.allMonitors.forEach(m => groups.add(m.group));
             return Array.from(groups).sort();
+        },
+
+        physicsModeLabel() {
+            if (!this.isPhysicsActive) {
+                return "STABIL";
+            }
+            return this.nodes.length > this.physicsNodeLimit ? "CLUSTER" : "FULL";
+        },
+
+        physicsStatusClass() {
+            return this.physicsModeLabel === "CLUSTER" ? "text-warning" : "text-secondary";
+        },
+
+        physicsStatusDetail() {
+            if (!this.isPhysicsActive) {
+                return "Posisi stabil; physics dihentikan untuk menjaga FPS.";
+            }
+            if (this.nodes.length > this.physicsNodeLimit) {
+                return `${this.nodes.length} node; repulsi dibatasi ke cluster/hub.`;
+            }
+            return `${this.nodes.length} node; force simulation aktif.`;
         },
 
         matchedNodeCount() {
@@ -430,11 +470,8 @@ export default {
         },
     },
     watch: {
-        allMonitors: {
-            handler() {
-                this.syncGraphData();
-            },
-            deep: true,
+        topologySignature() {
+            this.syncGraphData();
         },
         selectedGroup() {
             this.syncGraphData();
@@ -637,6 +674,7 @@ export default {
 
         // Build Graph Nodes and Links from Uptime Kuma monitors
         syncGraphData(initial = false) {
+            this.physicsStableFrames = 0;
             const existingNodeMap = new Map();
             this.nodes.forEach(n => existingNodeMap.set(n.id, n));
 
@@ -908,6 +946,7 @@ export default {
         },
 
         reheatSimulation() {
+            this.physicsStableFrames = 0;
             this.nodes.forEach(n => {
                 if (n.type !== "core" && n.type !== "tag") {
                     n.vx += (Math.random() - 0.5) * 5;
@@ -954,17 +993,28 @@ export default {
             const nodes = this.nodes;
             const links = this.links;
             const nodeCount = nodes.length;
+            const isLargeTopology = nodeCount > this.physicsNodeLimit;
 
-            const kRepel = 2400;
-            const kSpring = 0.035;
+            const kRepel = isLargeTopology ? 1600 : 2400;
+            const kSpring = isLargeTopology ? 0.045 : 0.035;
             const kGravity = 0.003;
-            const damping = 0.86;
+            const damping = isLargeTopology ? 0.80 : 0.86;
+            const maxRepelDistSq = isLargeTopology ? 25000 : 90000;
 
             // 1. Coulomb Repulsion between nodes
             for (let i = 0; i < nodeCount; i++) {
                 const n1 = nodes[i];
                 if (n1.type === "tag") {
                     continue; // Tag node statis, tidak berinteraksi repulsi
+                }
+
+                // Untuk topology besar, repulsi hanya diproses antar cluster/hub
+                // (core & kantor) dan tetangga dekat agar kalkulasi tidak membebani CPU
+                if (isLargeTopology && n1.type !== "core" && n1.type !== "kantor") {
+                    // Endpoint nodes hanya ditarik pegas cluster & gravitasi pusat
+                    n1.vx -= n1.x * kGravity;
+                    n1.vy -= n1.y * kGravity;
+                    continue;
                 }
 
                 for (let j = i + 1; j < nodeCount; j++) {
@@ -976,7 +1026,7 @@ export default {
                     const dx = n2.x - n1.x;
                     const dy = n2.y - n1.y;
                     const distSq = dx * dx + dy * dy + 150;
-                    if (distSq < 90000) { // Limit repulsion radius for high performance
+                    if (distSq < maxRepelDistSq) { // Limit repulsion radius for high performance
                         const dist = Math.sqrt(distSq);
                         const force = kRepel / distSq;
                         const fx = (dx / dist) * force;
@@ -1020,7 +1070,8 @@ export default {
                 tgt.vy -= fy;
             }
 
-            // 3. Apply velocity & friction
+            // 3. Apply velocity & friction and measure movement
+            let maxMovement = 0;
             for (let i = 0; i < nodeCount; i++) {
                 const n = nodes[i];
 
@@ -1060,6 +1111,20 @@ export default {
 
                 n.x += n.vx;
                 n.y += n.vy;
+
+                if (speed > maxMovement) {
+                    maxMovement = speed;
+                }
+            }
+
+            // Nonaktifkan simulasi fisika setelah posisi stabil (Energy stabilization cooling)
+            if (maxMovement < 0.12 && !this.draggedNode) {
+                this.physicsStableFrames++;
+                if (this.physicsStableFrames > 25) {
+                    this.isPhysicsActive = false;
+                }
+            } else {
+                this.physicsStableFrames = 0;
             }
         },
 
@@ -1642,6 +1707,14 @@ export default {
 .noc-panel-toggle {
     min-width: 42px;
     line-height: 1.2;
+}
+
+.noc-physics-status {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 11px;
 }
 
 .noc-panel-content {
