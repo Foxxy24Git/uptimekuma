@@ -8,6 +8,7 @@ ENV NODE_ENV=production \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends dumb-init ca-certificates curl iputils-ping \
+    && chmod u+s /bin/ping \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json .npmrc ./

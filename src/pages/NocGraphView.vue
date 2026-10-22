@@ -175,6 +175,13 @@
                             </div>
                         </div>
 
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="text-secondary small">Garis Tag Selalu Tampil:</span>
+                            <div class="form-check form-switch mb-0">
+                                <input v-model="showTagLinesAlways" class="form-check-input" type="checkbox" />
+                            </div>
+                        </div>
+
                         <!-- Distance slider -->
                         <div class="mt-2">
                             <div class="d-flex justify-content-between text-secondary small">
@@ -240,7 +247,7 @@
             <div
                 v-if="hoveredNode"
                 class="noc-graph-tooltip"
-                :style="{ left: tooltipPos.x + 15 + 'px', top: tooltipPos.y + 15 + 'px' }"
+                :style="{ left: tooltipPos.x + 'px', top: tooltipPos.y + 'px' }"
             >
                 <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
                     <span class="badge" :class="getBadgeClass(hoveredNode)">
@@ -291,6 +298,7 @@ export default {
             showBackup: true,
             showAtmTag: false, // Default mati agar tidak membuat jaring laba-laba ke semua node ATM
             showTagNodes: true,
+            showTagLinesAlways: true, // Garis tag selalu tampil (matikan = hanya saat hover)
             enableParticles: true,
             alwaysShowLabels: false,
             isPhysicsActive: true,
@@ -311,6 +319,7 @@ export default {
             // Interaction State
             hoveredNode: null,
             tooltipPos: { x: 0, y: 0 },
+            canvasSize: { width: 0, height: 0 },
             isDragging: false,
             draggedNode: null,
             isPanning: false,
@@ -319,6 +328,12 @@ export default {
             // Animation Frame
             animationFrameId: null,
             lastFrameTime: performance.now(),
+
+            // Throttle timer for heartbeat driven graph refreshes
+            liveSyncTimer: null,
+
+            // Resize observer instance
+            resizeObserver: null,
         };
     },
     computed: {
@@ -457,12 +472,29 @@ export default {
         this.syncGraphData(true);
         this.startRenderLoop();
 
+        // Refresh node status/latency in real time when heartbeats arrive, so the
+        // graph no longer needs a browser refresh when a host goes down or up.
+        this.$watch(() => this.$root.lastHeartbeatList, this.scheduleLiveSync);
+        this.$watch(() => this.apiLastHeartbeats, this.scheduleLiveSync);
+
         window.addEventListener("resize", this.handleResize);
+        if (typeof ResizeObserver !== "undefined" && this.$refs.canvas) {
+            this.resizeObserver = new ResizeObserver(() => {
+                this.handleResize();
+            });
+            this.resizeObserver.observe(this.$refs.canvas);
+        }
     },
     beforeUnmount() {
         if (this.clockTimer) {clearInterval(this.clockTimer);}
         if (this.apiTimer) {clearInterval(this.apiTimer);}
+        if (this.liveSyncTimer) {
+            clearTimeout(this.liveSyncTimer);
+        }
         if (this.animationFrameId) {cancelAnimationFrame(this.animationFrameId);}
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+        }
         window.removeEventListener("resize", this.handleResize);
     },
     methods: {
@@ -492,23 +524,115 @@ export default {
                 || (this.apiLastHeartbeats && this.apiLastHeartbeats[monitorId]);
         },
 
-        initCanvas() {
+        // Throttled refresh trigger for live heartbeat / REST poll updates.
+        // Throttling keeps the 60 FPS render loop smooth on large topologies.
+        scheduleLiveSync() {
+            if (this.liveSyncTimer) {
+                return;
+            }
+
+            this.liveSyncTimer = setTimeout(() => {
+                this.liveSyncTimer = null;
+                this.syncLiveData();
+            }, 1000);
+        },
+
+        // Applies fresh heartbeat data to the graph. An active status filter
+        // changes which nodes are visible, so the topology has to be rebuilt.
+        syncLiveData() {
+            if (this.statusFilter === "ALL") {
+                this.refreshNodeStatuses();
+            } else {
+                this.syncGraphData();
+            }
+        },
+
+        // Updates status and latency of the existing nodes in place, without
+        // rebuilding the topology or resetting node positions.
+        refreshNodeStatuses() {
+            let statusChanged = false;
+            let hasAnyDown = false;
+
+            this.nodes.forEach(node => {
+                if (node.monitorId === undefined) {
+                    return;
+                }
+
+                const beat = this.getBeat(node.monitorId);
+                let status = "up";
+                let ping = beat && beat.ping ? beat.ping : 0;
+
+                if (beat && beat.status === DOWN) {
+                    status = "down";
+                } else if (beat && beat.ping > 150) {
+                    status = "slow";
+                }
+
+                if (node.status !== status) {
+                    statusChanged = true;
+                }
+
+                node.status = status;
+                node.ping = ping;
+
+                if (status === "down") {
+                    hasAnyDown = true;
+                }
+            });
+
+            const core = this.nodes.find(node => node.type === "core");
+            if (core) {
+                const coreStatus = hasAnyDown ? "down" : "up";
+                if (core.status !== coreStatus) {
+                    statusChanged = true;
+                }
+                core.status = coreStatus;
+            }
+
+            // Particles only flow through healthy links, so they are rebuilt
+            // when a link changed between up and down.
+            if (statusChanged) {
+                this.initParticles();
+            }
+        },
+
+        initCanvas(preserveView = false) {
             const canvas = this.$refs.canvas;
-            const container = this.$refs.container;
-            if (!canvas || !container) {return;}
+            if (!canvas) {return;}
 
-            const rect = container.getBoundingClientRect();
+            // PENTING: ukuran yang dipakai HARUS sama dengan ukuran tampilan CSS canvas.
+            // Sebelumnya diukur dari container (100vh termasuk header) sehingga buffer
+            // canvas lebih tinggi dari area tampilnya -> gambar teregang vertikal dan
+            // posisi hit-test kursor meleset (harus digeser sedikit ke bawah).
+            const rect = canvas.getBoundingClientRect();
+            const cssWidth = Math.max(Math.round(rect.width) || canvas.clientWidth || 0, 1);
+            const cssHeight = Math.max(Math.round(rect.height) || canvas.clientHeight || 0, 1);
             const dpr = window.devicePixelRatio || 1;
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
 
-            // Center camera
-            this.camera.x = rect.width / 2;
-            this.camera.y = rect.height / 2;
+            const targetWidth = Math.round(cssWidth * dpr);
+            const targetHeight = Math.round(cssHeight * dpr);
+            if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
+            }
+
+            const prevWidth = this.canvasSize.width;
+            const prevHeight = this.canvasSize.height;
+            this.canvasSize = { width: cssWidth, height: cssHeight };
+
+            if (preserveView && prevWidth > 0 && prevHeight > 0) {
+                // Pertahankan titik dunia yang sama di tengah layar saat resize
+                this.camera.x += (cssWidth - prevWidth) / 2;
+                this.camera.y += (cssHeight - prevHeight) / 2;
+            } else {
+                // Center camera relatif terhadap area canvas (bukan halaman penuh)
+                this.camera.x = cssWidth / 2;
+                this.camera.y = cssHeight / 2;
+            }
         },
 
         handleResize() {
-            this.initCanvas();
+            this.initCanvas(true);
         },
 
         // Build Graph Nodes and Links from Uptime Kuma monitors
@@ -630,9 +754,9 @@ export default {
                 const tagId = "TAG_" + tag;
                 const existing = existingNodeMap.get(tagId);
 
-                // Initial position around Core
+                // Initial position: orbit luar, jauh dari cluster kantor
                 const angle = (idx * tagAngleStep) + (Math.PI / 4);
-                const dist = 130;
+                const dist = 330;
                 const defaultX = Math.cos(angle) * dist;
                 const defaultY = Math.sin(angle) * dist;
 
@@ -785,7 +909,7 @@ export default {
 
         reheatSimulation() {
             this.nodes.forEach(n => {
-                if (n.type !== "core") {
+                if (n.type !== "core" && n.type !== "tag") {
                     n.vx += (Math.random() - 0.5) * 5;
                     n.vy += (Math.random() - 0.5) * 5;
                 }
@@ -794,9 +918,9 @@ export default {
         },
 
         resetCamera() {
-            const container = this.$refs.container;
-            if (container) {
-                const rect = container.getBoundingClientRect();
+            const canvas = this.$refs.canvas;
+            if (canvas) {
+                const rect = canvas.getBoundingClientRect();
                 this.camera.x = rect.width / 2;
                 this.camera.y = rect.height / 2;
                 this.camera.scale = 0.95;
@@ -811,8 +935,9 @@ export default {
                     (n.hostname && n.hostname.toLowerCase().includes(q));
             });
 
-            if (found && this.$refs.container) {
-                const rect = this.$refs.container.getBoundingClientRect();
+            const canvas = this.$refs.canvas;
+            if (found && canvas) {
+                const rect = canvas.getBoundingClientRect();
                 this.camera.x = (rect.width / 2) - (found.x * 1.5);
                 this.camera.y = (rect.height / 2) - (found.y * 1.5);
                 this.camera.scale = 1.5;
@@ -838,8 +963,16 @@ export default {
             // 1. Coulomb Repulsion between nodes
             for (let i = 0; i < nodeCount; i++) {
                 const n1 = nodes[i];
+                if (n1.type === "tag") {
+                    continue; // Tag node statis, tidak berinteraksi repulsi
+                }
+
                 for (let j = i + 1; j < nodeCount; j++) {
                     const n2 = nodes[j];
+                    if (n2.type === "tag") {
+                        continue; // Lewati tag node
+                    }
+
                     const dx = n2.x - n1.x;
                     const dy = n2.y - n1.y;
                     const distSq = dx * dx + dy * dy + 150;
@@ -857,13 +990,21 @@ export default {
                 }
 
                 // Center Gravity
-                n1.vx -= n1.x * kGravity;
-                n1.vy -= n1.y * kGravity;
+                if (n1.type !== "core") {
+                    n1.vx -= n1.x * kGravity;
+                    n1.vy -= n1.y * kGravity;
+                }
             }
 
             // 2. Hooke Spring Attraction along links
             for (let i = 0; i < links.length; i++) {
                 const link = links[i];
+
+                // ZERO-FORCE FOR TAG RELATIONS: Tag tidak menarik monitor & monitor tidak menarik tag
+                if (link.isTagLink || link.isTagCoreLink) {
+                    continue;
+                }
+
                 const src = link.source;
                 const tgt = link.target;
                 const dx = tgt.x - src.x;
@@ -883,10 +1024,17 @@ export default {
             for (let i = 0; i < nodeCount; i++) {
                 const n = nodes[i];
 
-                // Core DC fixed or soft anchor at origin
+                // Core DC fixed at origin
                 if (n.type === "core" && this.draggedNode !== n) {
                     n.x = 0;
                     n.y = 0;
+                    n.vx = 0;
+                    n.vy = 0;
+                    continue;
+                }
+
+                // Tag nodes pinned / statis (kecuali saat di-drag manual oleh user)
+                if (n.type === "tag" && this.draggedNode !== n) {
                     n.vx = 0;
                     n.vy = 0;
                     continue;
@@ -982,6 +1130,11 @@ export default {
                 ctx.lineTo(tgt.x, tgt.y);
 
                 if (link.isTagLink || link.isTagCoreLink) {
+                    // Garis tag hanya referensi visual, bisa disembunyikan sampai di-hover
+                    if (!this.showTagLinesAlways && !isConnected) {
+                        continue;
+                    }
+
                     ctx.setLineDash([2, 4]);
                     const tagColor = link.color || "#14b8a6";
                     ctx.strokeStyle = isConnected ? this.rgbaFromHex(tagColor, alpha * 1.5) : this.rgbaFromHex(tagColor, alpha * 0.6);
@@ -1152,37 +1305,80 @@ export default {
         // MOUSE & INTERACTION HANDLERS
         // ==========================================
         getCanvasMouseWorld(e) {
-            const rect = this.$refs.canvas.getBoundingClientRect();
+            const canvas = this.$refs.canvas;
+            const rect = canvas ? canvas.getBoundingClientRect() : { left: 0, top: 0 };
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
 
-            const worldX = (mouseX - this.camera.x) / this.camera.scale;
-            const worldY = (mouseY - this.camera.y) / this.camera.scale;
+            const scale = this.camera.scale || 1;
+            const worldX = (mouseX - this.camera.x) / scale;
+            const worldY = (mouseY - this.camera.y) / scale;
 
             return { worldX, worldY, clientX: e.clientX, clientY: e.clientY };
         },
 
         findNodeAt(worldX, worldY) {
+            const scale = this.camera.scale || 1;
+
+            // Toleransi hitbox dalam SATUAN LAYAR (px), lalu dikonversi ke world space.
+            // Sebelumnya radius world statis -> saat zoom jauh node jadi minuscule
+            // dan kursor mudah "miss" / meleset ke node lain.
+            const minScreenRadius = 14;
+
+            let best = null;
+            let bestDistance = Infinity;
+
             for (let i = this.nodes.length - 1; i >= 0; i--) {
                 const n = this.nodes[i];
                 const dx = worldX - n.x;
                 const dy = worldY - n.y;
-                const hitRadius = Math.max(n.radius + 5, 8);
-                if (dx * dx + dy * dy <= hitRadius * hitRadius) {
-                    return n;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                const nodeScreenRadius = (n.radius || 6) * scale;
+                const hitRadius = Math.max(nodeScreenRadius + 6, minScreenRadius) / scale;
+
+                if (dist <= hitRadius) {
+                    // Ambil node yang paling dekat dengan kursor (node kecil di atas
+                    // node besar harus tetap bisa dipilih).
+                    if (dist < bestDistance || (dist === bestDistance && best && n.radius < best.radius)) {
+                        best = n;
+                        bestDistance = dist;
+                    }
                 }
             }
-            return null;
+            return best;
+        },
+
+        setTooltipPos(clientX, clientY) {
+            // Estimasi ukuran tooltip untuk mencegah kartu keluar dari viewport
+            const margin = 12;
+            const estWidth = 260;
+            const estHeight = 150;
+            const maxX = window.innerWidth - estWidth - margin;
+            const maxY = window.innerHeight - estHeight - margin;
+
+            let x = clientX + 15;
+            let y = clientY + 15;
+
+            if (x > maxX) {
+                x = Math.max(margin, clientX - estWidth - 15);
+            }
+            if (y > maxY) {
+                y = Math.max(margin, clientY - estHeight - 15);
+            }
+
+            this.tooltipPos = { x, y };
         },
 
         onMouseDown(e) {
-            const { worldX, worldY } = this.getCanvasMouseWorld(e);
+            const { worldX, worldY, clientX, clientY } = this.getCanvasMouseWorld(e);
             const hit = this.findNodeAt(worldX, worldY);
 
             if (hit) {
                 this.isDragging = true;
                 this.draggedNode = hit;
                 this.hoveredNode = hit;
+                this.setTooltipPos(clientX, clientY);
             } else {
                 this.isPanning = true;
                 this.panStart = { x: e.clientX - this.camera.x, y: e.clientY - this.camera.y };
@@ -1197,7 +1393,7 @@ export default {
                 this.draggedNode.y = worldY;
                 this.draggedNode.vx = 0;
                 this.draggedNode.vy = 0;
-                this.tooltipPos = { x: clientX, y: clientY };
+                this.setTooltipPos(clientX, clientY);
                 return;
             }
 
@@ -1213,7 +1409,7 @@ export default {
                 this.hoveredNode = hit;
             }
             if (hit) {
-                this.tooltipPos = { x: clientX, y: clientY };
+                this.setTooltipPos(clientX, clientY);
             }
         },
 
@@ -1243,6 +1439,17 @@ export default {
             this.camera.x = mouseX - (mouseX - this.camera.x) * (newScale / this.camera.scale);
             this.camera.y = mouseY - (mouseY - this.camera.y) * (newScale / this.camera.scale);
             this.camera.scale = newScale;
+
+            // Recompute hover agar hit-test mengikuti scale baru secara instan
+            const hit = this.findNodeAt((e.clientX - rect.left - this.camera.x) / newScale, (e.clientY - rect.top - this.camera.y) / newScale);
+            if (hit !== this.hoveredNode) {
+                this.hoveredNode = hit;
+            }
+            if (hit) {
+                this.setTooltipPos(e.clientX, e.clientY);
+            } else {
+                this.hoveredNode = null;
+            }
         },
 
         toggleFullScreen() {

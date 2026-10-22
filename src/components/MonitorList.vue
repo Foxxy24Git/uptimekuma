@@ -161,6 +161,10 @@ export default {
                 tags: null,
             },
             collapseKey: 0,
+            // Latest known status per monitor ID, used to detect up/down flips
+            beatStatusSnapshot: {},
+            // Incremented whenever a monitor flips status so the list re-sorts live
+            heartbeatVersion: 0,
         };
     },
     computed: {
@@ -187,6 +191,12 @@ export default {
          * @returns {Array} The sorted list of monitors.
          */
         sortedMonitorList() {
+            // Referencing heartbeatVersion keeps this list in sync with live
+            // heartbeat data, so it is re-sorted as soon as a monitor flips
+            // between up and down. Without it the order can stay stale until
+            // the page is reloaded.
+            void this.heartbeatVersion;
+
             let result = Object.values(this.$root.monitorList);
 
             result = result.filter((monitor) => {
@@ -370,6 +380,13 @@ export default {
             }
         },
     },
+    created() {
+        this.seedBeatStatusSnapshot();
+
+        // Re-sort the list in real time whenever a monitor goes down or comes
+        // back up, instead of waiting for a manual page refresh.
+        this.$watch(() => this.$root.lastHeartbeatList, this.onHeartbeatListChanged);
+    },
     mounted() {
         window.addEventListener("scroll", this.onScroll);
     },
@@ -387,6 +404,57 @@ export default {
             } else {
                 this.windowTop = 133;
             }
+        },
+        /**
+         * Stores the last known status of every monitor so only real status
+         * flips trigger a re-sort of a potentially 300+ monitor list.
+         * @returns {void}
+         */
+        seedBeatStatusSnapshot() {
+            const heartbeats = this.$root.lastHeartbeatList || {};
+
+            for (const monitorID in heartbeats) {
+                if (heartbeats[monitorID]) {
+                    this.beatStatusSnapshot[monitorID] = heartbeats[monitorID].status;
+                }
+            }
+        },
+        /**
+         * Watches the live heartbeat list and bumps heartbeatVersion when at
+         * least one monitor changed status, which re-sorts the monitor list
+         * without a page refresh.
+         * @param {object} heartbeats Latest heartbeat per monitor ID
+         * @returns {void}
+         */
+        onHeartbeatListChanged(heartbeats) {
+            if (!heartbeats) {
+                return;
+            }
+
+            let changedCount = 0;
+
+            for (const monitorID in heartbeats) {
+                const status = heartbeats[monitorID] ? heartbeats[monitorID].status : null;
+
+                if (this.beatStatusSnapshot[monitorID] !== status) {
+                    this.beatStatusSnapshot[monitorID] = status;
+                    changedCount++;
+                }
+            }
+
+            if (changedCount > 0) {
+                this.heartbeatVersion++;
+            }
+        },
+        /**
+         * Whether the monitor is currently reporting DOWN.
+         * @param {object} monitor Monitor to check
+         * @returns {boolean} True if the latest heartbeat status is DOWN
+         */
+        isMonitorDown(monitor) {
+            const heartbeat = this.$root.lastHeartbeatList[monitor.id];
+
+            return !!heartbeat && heartbeat.status === DOWN;
         },
         /**
          * Get URL of monitor
@@ -682,6 +750,15 @@ export default {
 
             if ((stats1?.downCount ?? 0) !== (stats2?.downCount ?? 0)) {
                 return (stats2?.downCount ?? 0) - (stats1?.downCount ?? 0);
+            }
+
+            // A monitor that is currently DOWN floats above healthy ones, so a
+            // single offline hostname is immediately visible in its group.
+            const isDown1 = this.isMonitorDown(m1) ? 1 : 0;
+            const isDown2 = this.isMonitorDown(m2) ? 1 : 0;
+
+            if (isDown1 !== isDown2) {
+                return isDown2 - isDown1;
             }
 
             if (m1.active !== m2.active) {
