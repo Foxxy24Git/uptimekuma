@@ -184,6 +184,10 @@
                             <div class="mt-1 text-secondary">
                                 {{ physicsStatusDetail }}
                             </div>
+                            <div class="d-flex align-items-center gap-2 mt-2 pt-2 border-top border-secondary-subtle" aria-label="Monitoring heartbeat realtime aktif">
+                                <span class="noc-live-heartbeat-dot" aria-hidden="true"></span>
+                                <span class="fw-bold text-success">LIVE HEARTBEAT</span>
+                            </div>
                         </div>
 
                         <div class="d-flex align-items-center justify-content-between mb-2">
@@ -422,19 +426,19 @@ export default {
             if (!this.isPhysicsActive) {
                 return "STABIL";
             }
-            return this.nodes.length > this.physicsNodeLimit ? "CLUSTER" : "FULL";
+            return this.nodes.length > this.physicsNodeLimit ? "CLUSTER CERDAS" : "FULL";
         },
 
         physicsStatusClass() {
-            return this.physicsModeLabel === "CLUSTER" ? "text-warning" : "text-secondary";
+            return this.physicsModeLabel === "CLUSTER CERDAS" ? "text-warning" : "text-secondary";
         },
 
         physicsStatusDetail() {
             if (!this.isPhysicsActive) {
-                return "Posisi stabil; physics dihentikan untuk menjaga FPS.";
+                return "Layout stabil; monitoring heartbeat tetap realtime.";
             }
             if (this.nodes.length > this.physicsNodeLimit) {
-                return `${this.nodes.length} node; repulsi dibatasi ke cluster/hub.`;
+                return `${this.nodes.length} node; repulsi lokal per cluster aktif.`;
             }
             return `${this.nodes.length} node; force simulation aktif.`;
         },
@@ -1767,6 +1771,35 @@ export default {
     border-radius: 6px;
     padding: 8px 10px;
     font-size: 11px;
+}
+
+.noc-live-heartbeat-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #22c55e;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+    animation: noc-heartbeat-pulse 1.6s infinite ease-in-out;
+}
+
+@keyframes noc-heartbeat-pulse {
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(0.8);
+        opacity: 0.35;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .noc-live-heartbeat-dot {
+        animation: none;
+    }
 }
 
 .noc-panel-content {
