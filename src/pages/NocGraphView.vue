@@ -288,7 +288,15 @@
 <script>
 import dayjs from "dayjs";
 import { UP, DOWN } from "../util.ts";
-import { buildNodesByGroup, getRepelWeight } from "../noc-graph-cluster";
+import {
+    buildNodesByGroup,
+    getRepelWeight,
+    applyHubRepulsion,
+    applyClusterRepulsion,
+    applyOfflineOutwardForce,
+    applySpringForce,
+    applyCenterGravity,
+} from "../noc-graph-cluster";
 
 export default {
     name: "NocGraphView",
@@ -1003,7 +1011,9 @@ export default {
         // PHYSICS ENGINE LOOP (FORCE-DIRECTED 60 FPS)
         // ==========================================
         updatePhysics() {
-            if (!this.isPhysicsActive) {return;}
+            if (!this.isPhysicsActive) {
+                return;
+            }
 
             const nodes = this.nodes;
             const links = this.links;
@@ -1016,73 +1026,54 @@ export default {
             const damping = isLargeTopology ? 0.80 : 0.86;
             const maxRepelDistSq = isLargeTopology ? 25000 : 90000;
 
-            // 1. Coulomb Repulsion between nodes
+            // 1. Two-Tier Repulsion & Offline Outward Boost
+            // 1a. Hub Repulsion: Core & Kantor nodes repel each other
+            const hubNodes = [];
+            const hubMap = new Map();
             for (let i = 0; i < nodeCount; i++) {
-                const n1 = nodes[i];
-                if (n1.type === "tag") {
-                    continue; // Tag node statis, tidak berinteraksi repulsi
+                const n = nodes[i];
+                if (n.type === "core" || n.type === "kantor") {
+                    hubNodes.push(n);
+                    hubMap.set(n.id, n);
                 }
+            }
+            applyHubRepulsion(hubNodes, {
+                kRepel: isLargeTopology ? 2200 : 3200,
+                maxRepelDistSq,
+            });
 
-                // Untuk topology besar, repulsi hanya diproses antar cluster/hub
-                // (core & kantor) dan tetangga dekat agar kalkulasi tidak membebani CPU
-                if (isLargeTopology && n1.type !== "core" && n1.type !== "kantor") {
-                    // Endpoint nodes hanya ditarik pegas cluster & gravitasi pusat
-                    n1.vx -= n1.x * kGravity;
-                    n1.vy -= n1.y * kGravity;
-                    continue;
-                }
-
-                for (let j = i + 1; j < nodeCount; j++) {
-                    const n2 = nodes[j];
-                    if (n2.type === "tag") {
-                        continue; // Lewati tag node
-                    }
-
-                    const dx = n2.x - n1.x;
-                    const dy = n2.y - n1.y;
-                    const distSq = dx * dx + dy * dy + 150;
-                    if (distSq < maxRepelDistSq) { // Limit repulsion radius for high performance
-                        const dist = Math.sqrt(distSq);
-                        const force = kRepel / distSq;
-                        const fx = (dx / dist) * force;
-                        const fy = (dy / dist) * force;
-
-                        n1.vx -= fx;
-                        n1.vy -= fy;
-                        n2.vx += fx;
-                        n2.vy += fy;
-                    }
-                }
-
-                // Center Gravity
-                if (n1.type !== "core") {
-                    n1.vx -= n1.x * kGravity;
-                    n1.vy -= n1.y * kGravity;
+            // 1b. Intra-Cluster Sibling Repulsion: within each cluster
+            const clusterMap = this.nodesByGroup || this.groupMembers;
+            if (clusterMap && clusterMap.size > 0) {
+                for (const members of clusterMap.values()) {
+                    applyClusterRepulsion(members, {
+                        kRepel,
+                        maxRepelDistSq,
+                    });
                 }
             }
 
+            // 1c. Offline Outward Boost: radial push for 'down' nodes away from parent
+            for (let i = 0; i < nodeCount; i++) {
+                const n = nodes[i];
+                if (n.status === "down" && n.parentId) {
+                    const parent = hubMap.get(n.parentId);
+                    if (parent) {
+                        applyOfflineOutwardForce(n, parent, {
+                            linkDistance: this.linkDistance,
+                            boostRatio: 0.20,
+                            kSpring,
+                        });
+                    }
+                }
+            }
+
+            // 1d. Center Gravity (applies to all dynamic nodes except core & tag)
+            applyCenterGravity(nodes, kGravity);
+
             // 2. Hooke Spring Attraction along links
             for (let i = 0; i < links.length; i++) {
-                const link = links[i];
-
-                // ZERO-FORCE FOR TAG RELATIONS: Tag tidak menarik monitor & monitor tidak menarik tag
-                if (link.isTagLink || link.isTagCoreLink) {
-                    continue;
-                }
-
-                const src = link.source;
-                const tgt = link.target;
-                const dx = tgt.x - src.x;
-                const dy = tgt.y - src.y;
-                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                const force = (dist - link.targetDist) * kSpring;
-                const fx = (dx / dist) * force;
-                const fy = (dy / dist) * force;
-
-                src.vx += fx;
-                src.vy += fy;
-                tgt.vx -= fx;
-                tgt.vy -= fy;
+                applySpringForce(links[i], { kSpring });
             }
 
             // 3. Apply velocity & friction and measure movement
