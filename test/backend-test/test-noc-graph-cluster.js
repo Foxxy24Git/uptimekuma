@@ -9,6 +9,9 @@ const {
     applyOfflineOutwardForce,
     applySpringForce,
     applyCenterGravity,
+    collectStatusChangedNodes,
+    shouldTriggerMicroReheat,
+    applyMicroReheatImpulse,
 } = require("../../src/noc-graph-cluster");
 
 describe("NOC Graph Cluster Helper", () => {
@@ -231,5 +234,128 @@ describe("NOC Graph Cluster Helper", () => {
         assert.strictEqual(tag.vx, 0);
         assert.strictEqual(kantor.vx, -0.5);
         assert.strictEqual(kantor.vy, -0.5);
+    });
+
+    // ==========================================
+    // Task 3 Tests: Realtime Micro-Reheat & Status Watcher
+    // ==========================================
+
+    test("collectStatusChangedNodes: mendeteksi node DOWN (previous 'up', new 'down')", () => {
+        const nodes = [
+            { id: "n1", previousStatus: "up", status: "down" },
+            { id: "n2", previousStatus: "up", status: "up" },
+        ];
+        const changed = collectStatusChangedNodes(nodes);
+        assert.strictEqual(changed.length, 1);
+        assert.strictEqual(changed[0].id, "n1");
+    });
+
+    test("collectStatusChangedNodes: mendeteksi node UP dari OFFLINE", () => {
+        const nodes = [
+            { id: "n1", previousStatus: "down", status: "up" },
+            { id: "n2", previousStatus: "down", status: "down" },
+        ];
+        const changed = collectStatusChangedNodes(nodes);
+        assert.strictEqual(changed.length, 1);
+        assert.strictEqual(changed[0].id, "n1");
+    });
+
+    test("shouldTriggerMicroReheat: true bila node transisi ke DOWN", () => {
+        const changed = [
+            { id: "n1", previousStatus: "up", status: "down" },
+        ];
+        assert.strictEqual(shouldTriggerMicroReheat(changed), true);
+    });
+
+    test("shouldTriggerMicroReheat: true bila node transisi ke UP (recovery)", () => {
+        const changed = [
+            { id: "n1", previousStatus: "down", status: "up" },
+        ];
+        assert.strictEqual(shouldTriggerMicroReheat(changed), true);
+    });
+
+    test("shouldTriggerMicroReheat: false bila tidak ada node berubah / hanya slow", () => {
+        assert.strictEqual(shouldTriggerMicroReheat([]), false);
+        assert.strictEqual(shouldTriggerMicroReheat(null), false);
+        assert.strictEqual(shouldTriggerMicroReheat(undefined), false);
+
+        const slowOnly = [
+            { id: "n1", previousStatus: "up", status: "slow" },
+            { id: "n2", previousStatus: "slow", status: "up" },
+        ];
+        assert.strictEqual(shouldTriggerMicroReheat(slowOnly), false);
+    });
+
+    test("applyMicroReheatImpulse: memberi kecepatan kecil random ke node (vx/vy tidak nol setelah pemanggilan)", () => {
+        const node = { id: "n1", type: "ATM", x: 100, y: 150, vx: 0, vy: 0 };
+        const returned = applyMicroReheatImpulse(node, 2);
+        assert.strictEqual(returned, node, "Harus mengembalikan node yang sama (in-place)");
+        assert.notStrictEqual(node.vx, 0, "node.vx harus tidak nol");
+        assert.notStrictEqual(node.vy, 0, "node.vy harus tidak nol");
+        assert.strictEqual(node.x, 100, "Koordinat x tidak boleh berubah saat diberi impuls");
+        assert.strictEqual(node.y, 150, "Koordinat y tidak boleh berubah saat diberi impuls");
+
+        // Core dan Tag diabaikan
+        const coreNode = { id: "core", type: "core", vx: 0, vy: 0 };
+        applyMicroReheatImpulse(coreNode, 2);
+        assert.strictEqual(coreNode.vx, 0);
+        assert.strictEqual(coreNode.vy, 0);
+
+        const tagNode = { id: "tag", type: "tag", vx: 0, vy: 0 };
+        applyMicroReheatImpulse(tagNode, 2);
+        assert.strictEqual(tagNode.vx, 0);
+        assert.strictEqual(tagNode.vy, 0);
+    });
+
+    test("Cooldown integrity: cooling down (isPhysicsActive reset) tidak merusak koordinat node", () => {
+        const state = {
+            isPhysicsActive: true,
+            physicsStableFrames: 0,
+        };
+        const nodes = [
+            { id: "n1", type: "ATM", x: 120, y: 80, vx: 0.05, vy: 0.02 },
+            { id: "n2", type: "ATM", x: 200, y: 150, vx: -0.04, vy: 0.01 },
+        ];
+        const initialX1 = nodes[0].x;
+        const initialY1 = nodes[0].y;
+
+        // Simulasi cooling down (maxMovement < 0.12 selama 26 frame)
+        const damping = 0.86;
+        for (let frame = 0; frame < 30; frame++) {
+            let maxMovement = 0;
+            for (const n of nodes) {
+                n.vx *= damping;
+                n.vy *= damping;
+                const speed = Math.hypot(n.vx, n.vy);
+                if (speed > maxMovement) {
+                    maxMovement = speed;
+                }
+                n.x += n.vx;
+                n.y += n.vy;
+            }
+
+            if (maxMovement < 0.12) {
+                state.physicsStableFrames++;
+                if (state.physicsStableFrames > 25) {
+                    state.isPhysicsActive = false;
+                }
+            } else {
+                state.physicsStableFrames = 0;
+            }
+        }
+
+        // Physics harus sudah non-aktif (cooling down berhasil)
+        assert.strictEqual(state.isPhysicsActive, false);
+        assert.ok(state.physicsStableFrames > 25);
+
+        // Koordinat node harus tetap valid angka berhingga, tidak NaN, dan dekat dengan posisi semula
+        for (const n of nodes) {
+            assert.ok(Number.isFinite(n.x), "x harus berupa angka berhingga");
+            assert.ok(Number.isFinite(n.y), "y harus berupa angka berhingga");
+            assert.ok(!Number.isNaN(n.x), "x tidak boleh NaN");
+            assert.ok(!Number.isNaN(n.y), "y tidak boleh NaN");
+        }
+        assert.ok(Math.abs(nodes[0].x - initialX1) < 2, "Perpindahan posisi selama micro-cooling harus sangat halus");
+        assert.ok(Math.abs(nodes[0].y - initialY1) < 2, "Perpindahan posisi selama micro-cooling harus sangat halus");
     });
 });

@@ -257,3 +257,94 @@ export function applyCenterGravity(nodes, params = 0.003) {
         n.vy = (n.vy || 0) - (n.y * kGravity);
     }
 }
+
+/**
+ * Collect nodes that have changed operational status.
+ * Compares node.previousStatus with node.status (or node.newStatus).
+ * @param {Array<object>} nodes Array of graph nodes
+ * @returns {Array<object>} Array of nodes with changed status
+ */
+export function collectStatusChangedNodes(nodes) {
+    if (!Array.isArray(nodes)) {
+        return [];
+    }
+
+    const changed = [];
+    for (const node of nodes) {
+        if (!node) {
+            continue;
+        }
+        const current = node.newStatus !== undefined ? node.newStatus : node.status;
+        const prev = node.previousStatus;
+
+        if (prev !== undefined && prev !== null && current !== undefined && current !== null && prev !== current) {
+            changed.push(node);
+        }
+    }
+
+    return changed;
+}
+
+/**
+ * Determine whether a status change should trigger physics micro-reheat.
+ * Returns true if at least one node transitioned to or from 'down' (failure or recovery).
+ * Transitions between 'up' and 'slow' do not trigger micro-reheat.
+ * @param {Array<object>} statusChangedNodes Array of nodes that changed status
+ * @returns {boolean} True if micro-reheat should be triggered
+ */
+export function shouldTriggerMicroReheat(statusChangedNodes) {
+    if (!Array.isArray(statusChangedNodes) || statusChangedNodes.length === 0) {
+        return false;
+    }
+
+    for (const node of statusChangedNodes) {
+        if (!node) {
+            continue;
+        }
+        const current = node.newStatus !== undefined ? node.newStatus : node.status;
+        const prev = node.previousStatus;
+
+        // Transition to DOWN (went offline)
+        if (current === "down" && prev !== "down") {
+            return true;
+        }
+        // Transition from DOWN (recovered back to up or slow)
+        if (prev === "down" && current !== "down") {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Apply a gentle random velocity impulse to a node for micro-reheating.
+ * Modifies node.vx and node.vy in-place and returns the node.
+ * Core and tag nodes are ignored and remain unmodified.
+ * @param {object} node Graph node
+ * @param {number} intensity Optional force intensity scale
+ * @returns {object} The mutated node
+ */
+export function applyMicroReheatImpulse(node, intensity = 2) {
+    if (!node || node.type === "core" || node.type === "tag") {
+        return node;
+    }
+
+    const force = typeof intensity === "number" ? intensity : 2;
+
+    // Small random impulse centered around 0
+    let rx = (Math.random() - 0.5) * force;
+    let ry = (Math.random() - 0.5) * force;
+
+    // Guard against exact zero
+    if (Math.abs(rx) < 0.001) {
+        rx = (Math.random() < 0.5 ? -1 : 1) * (force * 0.25 || 0.25);
+    }
+    if (Math.abs(ry) < 0.001) {
+        ry = (Math.random() < 0.5 ? -1 : 1) * (force * 0.25 || 0.25);
+    }
+
+    node.vx = (node.vx || 0) + rx;
+    node.vy = (node.vy || 0) + ry;
+    return node;
+}

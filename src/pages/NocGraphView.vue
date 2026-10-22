@@ -296,6 +296,9 @@ import {
     applyOfflineOutwardForce,
     applySpringForce,
     applyCenterGravity,
+    collectStatusChangedNodes,
+    shouldTriggerMicroReheat,
+    applyMicroReheatImpulse,
 } from "../noc-graph-cluster";
 
 export default {
@@ -618,9 +621,10 @@ export default {
 
                 if (node.status !== status) {
                     statusChanged = true;
+                    node.previousStatus = node.status;
+                    node.status = status;
                 }
 
-                node.status = status;
                 node.ping = ping;
                 node.repelWeight = getRepelWeight(node);
 
@@ -634,14 +638,26 @@ export default {
                 const coreStatus = hasAnyDown ? "down" : "up";
                 if (core.status !== coreStatus) {
                     statusChanged = true;
+                    core.previousStatus = core.status;
+                    core.status = coreStatus;
                 }
-                core.status = coreStatus;
             }
+
+            // Realtime Reactive Micro-Reheat: awaken physics gently only when
+            // nodes transition to or from DOWN status.
+            const changedNodes = collectStatusChangedNodes(this.nodes);
+            if (shouldTriggerMicroReheat(changedNodes)) {
+                this.triggerMicroReheat(changedNodes);
+            }
+            changedNodes.forEach(n => {
+                n.previousStatus = n.status;
+            });
 
             // Particles only flow through healthy links, so they are rebuilt
             // when a link changed between up and down.
             if (statusChanged) {
                 this.initParticles();
+                this.draw();
             }
         },
 
@@ -977,6 +993,36 @@ export default {
                 }
             });
             this.isPhysicsActive = true;
+        },
+
+        triggerMicroReheat(target) {
+            this.physicsStableFrames = 0;
+            this.isPhysicsActive = true;
+
+            let targets = [];
+            if (Array.isArray(target) && target.length > 0) {
+                targets = target;
+            } else if (typeof target === "string") {
+                const found = this.nodes.find(n => n.id === target);
+                if (found) {
+                    targets = [found];
+                }
+            } else if (target && typeof target === "object") {
+                targets = [target];
+            } else {
+                targets = this.nodes.filter(n => n.status === "down");
+                if (targets.length === 0) {
+                    targets = this.nodes;
+                }
+            }
+
+            targets.forEach(node => {
+                applyMicroReheatImpulse(node, 2);
+            });
+        },
+
+        microReheat(target) {
+            this.triggerMicroReheat(target);
         },
 
         resetCamera() {
