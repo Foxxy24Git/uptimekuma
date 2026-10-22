@@ -271,53 +271,41 @@
                     <span class="text-secondary small">Segera koordinasi dengan ISP / Tim terkait</span>
                 </div>
 
-                <div class="noc-incident-list d-flex flex-column gap-2" :class="{ 'noc-incident-scroll': downMonitorsInScope.length > 5 }">
-                    <div v-for="item in downMonitorsInScope" :key="item.id" class="noc-incident-row">
-                        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
-                            <!-- Left: Primary Info -->
-                            <div class="d-flex flex-column gap-1.5 min-w-0">
-                                <div class="d-flex align-items-center flex-wrap gap-2">
-                                    <span class="noc-badge-offline font-mono">OFFLINE</span>
-                                    <router-link :to="`/dashboard/${item.id}`" class="noc-incident-title text-truncate" :title="item.name">
+                <div class="noc-incident-grid" :class="{ 'noc-incident-scroll': downMonitorsInScope.length > 6 }">
+                    <router-link
+                        v-for="item in downMonitorsInScope"
+                        :key="item.id"
+                        :to="`/dashboard/${item.id}`"
+                        class="noc-rto-card text-decoration-none"
+                        :title="`${item.name} (${item.hostname || '-'}) - Klik untuk detail`"
+                    >
+                        <div class="noc-rto-card-inner">
+                            <!-- Top row: hostname (left) & TAG (right) -->
+                            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                                <div class="d-flex align-items-center gap-1.5 min-w-0">
+                                    <span class="noc-dot-red-pulse flex-shrink-0"></span>
+                                    <span class="noc-rto-hostname text-truncate fw-bold" :title="item.name">
                                         {{ item.name }}
-                                    </router-link>
-                                    <span class="noc-badge-type font-mono" :class="item.type === 'ATM' ? 'noc-badge-atm' : 'noc-badge-kantor'">
-                                        {{ item.type }}
                                     </span>
                                 </div>
-                                <div class="d-flex align-items-center flex-wrap gap-2 text-secondary noc-meta-line small">
-                                    <span>Grup: <b class="text-light fw-medium">{{ item.group }}</b></span>
-                                    <span class="noc-meta-sep">•</span>
-                                    <span>Tag: <b class="noc-tag-pill font-mono">{{ item.tag }}</b></span>
-                                    <span v-if="item.hostname" class="noc-meta-sep">•</span>
-                                    <span v-if="item.hostname" class="font-mono text-muted">IP: <span class="text-secondary">{{ item.hostname }}</span></span>
-                                    <span class="noc-meta-sep">•</span>
-                                    <span class="text-danger font-mono fw-medium">{{ item.msg || 'Request timeout' }}</span>
-                                </div>
+                                <span class="noc-rto-tag font-mono flex-shrink-0">
+                                    {{ item.tag || 'Non-Tag' }}
+                                </span>
                             </div>
 
-                            <!-- Right: Time & Action -->
-                            <div class="noc-incident-right-panel d-flex align-items-center gap-3">
-                                <div class="noc-incident-duration font-mono text-end">
-                                    <div class="d-flex align-items-center justify-content-end gap-1">
-                                        <svg class="text-secondary" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <circle cx="12" cy="12" r="10" />
-                                            <polyline points="12 6 12 12 16 14" />
-                                        </svg>
-                                        <span class="noc-downtime-val fw-bold">{{ formatDuration(item) }}</span>
-                                    </div>
-                                    <div class="text-secondary noc-downtime-sub">Durasi Offline</div>
+                            <!-- Bottom row: IP (left) & GRUP (right) -->
+                            <div class="d-flex align-items-center justify-content-between gap-2 text-secondary small noc-rto-bottom">
+                                <div class="d-flex align-items-center gap-1 min-w-0 font-mono noc-rto-ip">
+                                    <span class="noc-rto-lbl">IP:</span>
+                                    <span class="text-secondary text-truncate">{{ item.hostname || '-' }}</span>
                                 </div>
-                                <router-link :to="`/dashboard/${item.id}`" class="btn btn-sm noc-incident-action-btn" title="Buka Detail Monitor">
-                                    <span>Detail</span>
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                        <line x1="7" y1="17" x2="17" y2="7"></line>
-                                        <polyline points="7 7 17 7 17 17"></polyline>
-                                    </svg>
-                                </router-link>
+                                <div class="d-flex align-items-center gap-1 flex-shrink-0 noc-rto-group">
+                                    <span class="noc-rto-lbl">GRUP:</span>
+                                    <span class="text-light fw-medium">{{ item.group }}</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </router-link>
                 </div>
             </div>
         </div>
@@ -347,6 +335,10 @@ export default {
             apiTimer: null,
             apiMonitors: null,
             apiLastHeartbeats: null,
+            heartbeatVersion: 0,
+            liveSyncTimer: null,
+            unwatchHeartbeatList: null,
+            unwatchApiHeartbeats: null,
         };
     },
     computed: {
@@ -543,10 +535,32 @@ export default {
         // Fetch data via REST API if WebSocket monitorList is not available (e.g. unauthenticated or direct wall TV mode)
         this.checkAndFetchData();
         this.apiTimer = setInterval(this.checkAndFetchData, 15000);
+
+        // --- Prioritas 1: Live sync ---
+        // React to global heartbeat updates even though computed KPI helpers
+        // (isDown, getPing, etc.) only read $root last-heartbeat data inside
+        // methods. Incrementing heartbeatVersion forces every NOC computed +
+        // template to re-evaluate in one batch.
+        this.unwatchHeartbeatList = this.$watch(() => this.$root.lastHeartbeatList, this.scheduleLiveSync);
+        this.unwatchApiHeartbeats = this.$watch(() => this.apiLastHeartbeats, this.scheduleLiveSync);
+
+        // Fast-path: when a monitor flips DOWN or back UP, the monitor
+        // emits an important heartbeat. Coalesce to 200ms so the cards /
+        // incident list update almost instantly on real incidents.
+        this.handleImportantHeartbeat = this.onImportantHeartbeat.bind(this);
+        if (this.$root.emitter) {
+            this.$root.emitter.on("newImportantHeartbeat", this.handleImportantHeartbeat);
+        }
     },
     beforeUnmount() {
         if (this.clockTimer) {clearInterval(this.clockTimer);}
         if (this.apiTimer) {clearInterval(this.apiTimer);}
+        if (this.liveSyncTimer) {clearTimeout(this.liveSyncTimer); this.liveSyncTimer = null;}
+        if (this.unwatchHeartbeatList) {this.unwatchHeartbeatList(); this.unwatchHeartbeatList = null;}
+        if (this.unwatchApiHeartbeats) {this.unwatchApiHeartbeats(); this.unwatchApiHeartbeats = null;}
+        if (this.$root.emitter && this.handleImportantHeartbeat) {
+            this.$root.emitter.off("newImportantHeartbeat", this.handleImportantHeartbeat);
+        }
     },
     methods: {
         async checkAndFetchData() {
@@ -572,7 +586,34 @@ export default {
             this.currentDate = now.format("D MMM YYYY");
         },
 
+        // Coalesce ordinary heartbeat updates so a busy installation does not
+        // re-evaluate all KPI cards once per monitor heartbeat.
+        scheduleLiveSync(delay = 1000) {
+            const timeoutMs = (typeof delay === "number") ? delay : 1000;
+            if (this.liveSyncTimer) {
+                return;
+            }
+
+            this.liveSyncTimer = setTimeout(() => {
+                this.liveSyncTimer = null;
+                this.heartbeatVersion++;
+            }, timeoutMs);
+        },
+
+        onImportantHeartbeat() {
+            // Fast-path: clear normal throttle if any and trigger in 200ms
+            if (this.liveSyncTimer) {
+                clearTimeout(this.liveSyncTimer);
+                this.liveSyncTimer = null;
+            }
+            this.scheduleLiveSync(200);
+        },
+
         isDown(monitor) {
+            // Explicit dependency for computed properties that call this helper.
+            if (this.heartbeatVersion < 0) {
+                return false;
+            }
             const beat = (this.$root.lastHeartbeatList && this.$root.lastHeartbeatList[monitor.id])
                 || (this.apiLastHeartbeats && this.apiLastHeartbeats[monitor.id]);
             if (!beat) {return false;}
@@ -580,6 +621,9 @@ export default {
         },
 
         getPing(monitor) {
+            if (this.heartbeatVersion < 0) {
+                return "-";
+            }
             if (this.isDown(monitor)) {return "TIMEOUT";}
             const beat = (this.$root.lastHeartbeatList && this.$root.lastHeartbeatList[monitor.id])
                 || (this.apiLastHeartbeats && this.apiLastHeartbeats[monitor.id]);
@@ -595,6 +639,9 @@ export default {
         },
 
         formatDuration(monitor) {
+            if (this.heartbeatVersion < 0) {
+                return "Baru Saja";
+            }
             const beat = (this.$root.lastHeartbeatList && this.$root.lastHeartbeatList[monitor.id])
                 || (this.apiLastHeartbeats && this.apiLastHeartbeats[monitor.id]);
             if (!beat || !beat.time) {return "Baru Saja";}
@@ -807,12 +854,22 @@ export default {
     border-left: 2px solid rgba(220, 53, 69, 0.75);
 }
 
+.noc-incident-clickable {
+    cursor: pointer;
+}
+
 .noc-incident-list {
     min-height: 0;
 }
 
+.noc-incident-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
 .noc-incident-scroll {
-    max-height: 340px;
+    max-height: 390px;
     overflow-y: auto;
     padding: 2px 4px 2px 2px;
 }
@@ -826,18 +883,6 @@ export default {
     border-radius: 4px;
 }
 
-.noc-incident-row {
-    background: #151318;
-    border: 1px solid rgba(220, 53, 69, 0.22);
-    border-radius: 6px;
-    padding: 10px 14px;
-    transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-
-.noc-incident-row:hover {
-    background: #19161c;
-    border-color: rgba(220, 53, 69, 0.48);
-}
 
 .noc-dot-red-pulse {
     width: 7px;
@@ -889,74 +934,12 @@ export default {
     background: rgba(139, 92, 246, 0.10);
 }
 
-.noc-incident-title {
-    max-width: min(44vw, 420px);
-    color: #f8fafc;
-    font-size: 13.5px;
-    font-weight: 650;
-    text-decoration: none;
-}
-
-.noc-incident-title:hover {
-    color: #8be5aa;
-}
-
-.noc-meta-line {
-    font-size: 11px !important;
-    line-height: 1.5;
-    margin-top: 3px;
-}
-
-.noc-meta-sep {
-    color: #4b5563;
-    margin: 0 4px;
-}
-
 .noc-tag-pill {
     padding: 1.5px 6px;
     color: #cbd5e1;
     background: #0b101a;
     border: 1px solid #263247;
     font-size: 10px;
-}
-
-.noc-incident-right-panel {
-    flex: 0 0 auto;
-    min-width: 156px;
-    justify-content: flex-end;
-}
-
-.noc-incident-duration {
-    min-width: 82px;
-    flex: 0 0 82px;
-    white-space: nowrap;
-}
-
-.noc-downtime-val {
-    color: #ff9aa3;
-    font-size: 13px;
-}
-
-.noc-downtime-sub {
-    font-size: 10px;
-    letter-spacing: .02em;
-    margin-top: 2px;
-}
-
-.noc-incident-action-btn {
-    flex: 0 0 auto;
-    color: #b7c2d3;
-    border: 1px solid #334155;
-    background: #1a2230;
-    font-size: 11px;
-    padding: 5px 12px;
-    border-radius: 5px;
-}
-
-.noc-incident-action-btn:hover {
-    color: #fff;
-    border-color: #64748b;
-    background: #222d3f;
 }
 
 .noc-item-box {
@@ -1047,5 +1030,109 @@ export default {
 
 .btn-xs {
     font-size: 11px;
+}
+
+/* RTO cards — 3 perangkat per baris, kiri ke kanan */
+.noc-rto-card {
+    display: block;
+    min-width: 0;
+    color: inherit;
+    background: linear-gradient(145deg, #141721, #10131b);
+    border: 1px solid rgba(239, 89, 104, 0.28);
+    border-radius: 8px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+    transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.noc-rto-card:hover,
+.noc-rto-card:focus-visible {
+    color: inherit;
+    border-color: rgba(239, 89, 104, 0.72);
+    background: #181923;
+    box-shadow: 0 0 0 1px rgba(239, 89, 104, 0.08), 0 8px 22px rgba(0, 0, 0, 0.24);
+    outline: none;
+}
+
+.noc-rto-card-inner {
+    padding: 13px 14px 12px;
+}
+
+.noc-rto-hostname {
+    min-width: 0;
+    color: #edf2f8;
+    font-size: 13px;
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+}
+
+.noc-rto-card:hover .noc-rto-hostname,
+.noc-rto-card:focus-visible .noc-rto-hostname {
+    color: #fff;
+}
+
+.noc-rto-tag {
+    max-width: 42%;
+    padding: 4px 7px;
+    overflow: hidden;
+    color: #a7d8ff;
+    background: rgba(14, 165, 233, 0.10);
+    border: 1px solid rgba(14, 165, 233, 0.20);
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.noc-rto-bottom {
+    min-width: 0;
+    padding-top: 8px;
+    border-top: 1px solid rgba(148, 163, 184, 0.08);
+    font-size: 11px !important;
+}
+
+.noc-rto-ip {
+    flex: 1 1 auto;
+}
+
+.noc-rto-group {
+    max-width: 52%;
+    overflow: hidden;
+}
+
+.noc-rto-group .text-light {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.noc-rto-lbl {
+    color: #64748b;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+
+@media (max-width: 1100px) {
+    .noc-incident-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    .noc-incident-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .noc-rto-card-inner {
+        padding: 12px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .noc-rto-card {
+        transition: none;
+    }
 }
 </style>
